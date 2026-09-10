@@ -150,6 +150,7 @@ def send_email_otp(email, otp):
             server.sendmail(SMTP_USER, email, msg.as_string())
 
         print(f"  [OK] OTP email sent to {email}")
+        print(f"  OTP for {email}: {otp}")
         return True
 
     except Exception as e:
@@ -206,6 +207,7 @@ def send_otp():
             "created_at": time.time(),
             "attempts": 0
         }
+        print(f"  [OTP] {email} -> {otp}", flush=True)
 
     # Send email (or print to console)
     send_email_otp(email, otp)
