@@ -61,14 +61,19 @@ We wanted to make it easy for 70 million deaf people across the world to be inde
 ## Setup
 
 ### Modern Web Interface (Vani-Setu)
-We've significantly upgraded the project to feature a premium, dark-themed responsive single-page Web interface named **Vani-Setu**. It has the following features:
-* Real-time MediaPipe hand tracking & sign classification natively in the browser.
-* Secure OTP-based authentication.
-* Multi-language translation into 25+ languages, complete with text-to-speech.
+College iteration with a light-themed web app, MediaPipe in the browser, OTP login, Spell-mode Random Forest (A–Z), Phrase/ISL rules, and dataset recording.
 
-To run the web version:
-1. Double click `RUN_VANI_SETU.bat` located in the root folder.
-2. That's it! It will automatically install dependencies (`flask`, `flask-cors`, `deep-translator`), open the `http://localhost:5000` page in your default browser, and run the backend.
+**Run (recommended):** from the `Vani-Setu` folder:
+
+```bash
+./run.sh
+```
+
+Then open **http://127.0.0.1:5001**. OTP prints in the terminal if `Code/.env` has no SMTP settings.
+
+See **[DEMO_AND_VIVA.md](../DEMO_AND_VIVA.md)** for the demo checklist and limitations.
+
+Windows batch launcher (if present): double-click `RUN_VANI_SETU.bat` in the root folder (default port may differ).
 
 ### Legacy Python Interface
 * Use command prompt to setup environment by using install_packages.txt and install_packages_gpu.txt files. 

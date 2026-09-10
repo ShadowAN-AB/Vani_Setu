@@ -883,6 +883,7 @@
               <select id="collectLabel"></select>
               <button id="btnRecord">Record dataset</button>
               <span id="collectStat" style="font-size:11px;color:var(--muted);">0 samples</span>
+              <span id="collectHint" style="font-size:11px;color:var(--muted);">Aim for ~25 samples per sign</span>
             </div>
           </div>
         </div>
@@ -1520,8 +1521,10 @@ class ASL {
     if (tc && (n === 3 || n === 4)) return "Please";
     return '?';
   }
-  update(l) {
-    const s = this.mode === 'SPELL' ? this._spell(l) : (this.lang === 'ISL' ? this._isl(l) : this._phrase(l));
+  update(l, forced = null) {
+    // forced = ML letter when available; otherwise fall back to rule poses
+    const s = forced
+      || (this.mode === 'SPELL' ? this._spell(l) : (this.lang === 'ISL' ? this._isl(l) : this._phrase(l)));
     this.buf.push(s); if (this.buf.length > this.mx) this.buf.shift();
     if (this.cd > 0) { this.cd--; this.disp = this._top(); return [null, this.disp]; }
     const c = {}; this.buf.forEach(x => c[x] = (c[x] || 0) + 1);
@@ -1577,6 +1580,8 @@ class App {
     this.fpsFrames = 0; this.fpsLast = performance.now(); this.fpsVal = 0;
     this.mlReady = false; this.collecting = false; this.collectEvery = 0;
     this.lastLm = null; this.catalog = null;
+    this._mlBusy = false; this._mlLabel = null; this._mlConf = 0;
+    this.ML_MIN_CONF = 0.25; // RF probs dilute with 26 classes; buffer voting filters noise
   }
 
   async init() {
@@ -1615,6 +1620,7 @@ class App {
       }
     });
     document.getElementById('logoutBtn').onclick = () => {
+      this.stopCamera();
       sessionStorage.removeItem('vani_logged_in');
       sessionStorage.removeItem('vani_email');
       location.reload();
@@ -1653,6 +1659,10 @@ class App {
     document.getElementById('btnRecord').onclick = () => this.toggleRecord();
     this.loadCatalog();
     this.refreshModelStatus();
+
+    // Release webcam if the tab closes / user navigates away (green LED)
+    window.addEventListener('pagehide', () => this.stopCamera());
+    window.addEventListener('beforeunload', () => this.stopCamera());
   }
 
   showHome() {
@@ -1698,6 +1708,12 @@ class App {
     const phrases = this.asl.lang === 'ISL' ? I_INFO : P_INFO;
     const source = this.asl.mode === 'SPELL' ? S_INFO : phrases;
     sel.innerHTML = Object.keys(source).map(k => `<option value="${k}">${k}</option>`).join('');
+    const hint = document.getElementById('collectHint');
+    if (hint) {
+      hint.textContent = this.asl.mode === 'SPELL'
+        ? 'Spell recording → landmarks.csv (letter model)'
+        : 'Phrase recording → landmarks_phrases.csv (your data)';
+    }
   }
 
   renderGuide() {
@@ -1741,20 +1757,32 @@ class App {
     const btn = document.getElementById('btnRecord');
     btn.textContent = this.collecting ? 'Stop recording' : 'Record dataset';
     btn.classList.toggle('rec-on', this.collecting);
-    showToast(this.collecting ? 'Recording landmarks for the selected sign' : 'Recording stopped', 'info', 2200);
+    const kind = this.asl.mode === 'SPELL' ? 'letter' : 'phrase';
+    const label = document.getElementById('collectLabel').value || 'sign';
+    showToast(
+      this.collecting
+        ? `Recording ${kind} samples for “${label}” — hold pose, move hand slightly`
+        : 'Recording stopped',
+      'info',
+      2800
+    );
   }
 
   async saveSample(lm) {
     const label = document.getElementById('collectLabel').value;
+    const kind = this.asl.mode === 'SPELL' ? 'letter' : 'phrase';
     try {
       const res = await fetch('/api/collect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ label, landmarks: lm })
+        body: JSON.stringify({ label, landmarks: lm, kind })
       });
       const data = await res.json();
       if (data.success) {
-        document.getElementById('collectStat').textContent = `${data.label_count} × ${data.label}  (${data.samples} total)`;
+        const target = data.target || 25;
+        const done = data.label_count >= target ? ' ✓ goal met' : '';
+        document.getElementById('collectStat').textContent =
+          `${data.label_count}/${target} × ${data.label}  (${data.samples} in ${data.path})${done}`;
       }
     } catch (e) { /* ignore dropped frames */ }
   }
@@ -1767,15 +1795,28 @@ class App {
         body: JSON.stringify({ landmarks: lm })
       });
       const data = await res.json();
-      if (data.success && data.label && (data.confidence == null || data.confidence >= 0.55)) {
-        return data.label;
-      }
+      if (!data.success || !data.label) return null;
+      const conf = data.confidence == null ? 1 : Number(data.confidence);
+      // Accept mid-confidence RF votes; reject only very unsure ones
+      if (conf >= this.ML_MIN_CONF) return { label: data.label, confidence: conf };
     } catch (e) { /* fall back to rules */ }
     return null;
   }
 
+  stopCamera() {
+    try {
+      if (this.vid && this.vid.srcObject) {
+        this.vid.srcObject.getTracks().forEach(t => t.stop());
+        this.vid.srcObject = null;
+      }
+    } catch (e) { /* ignore */ }
+    this._mlLabel = null;
+    this._mlConf = 0;
+  }
+
   async cam() {
     try {
+      this.stopCamera();
       const s = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' } });
       this.vid = document.getElementById('webcam'); this.vid.srcObject = s; await this.vid.play();
       this.cvs = document.getElementById('canvas');
@@ -1790,6 +1831,7 @@ class App {
   }
 
   loop() {
+    if (!this.vid || !this.vid.srcObject) return;
     const r = this.hl.detectForVideo(this.vid, performance.now());
     this.cx.clearRect(0, 0, this.cvs.width, this.cvs.height);
     let sign = '?', com = null, ok = false;
@@ -1801,17 +1843,24 @@ class App {
         this.collectEvery++;
         if (this.collectEvery % 4 === 0) this.saveSample(lm);
       }
-      if (this.mlReady && !this._mlBusy) {
+      // Letter model only — do not mix into Phrase/ISL buffers
+      const useMl = this.mlReady && this.asl.mode === 'SPELL';
+      if (useMl && !this._mlBusy) {
         this._mlBusy = true;
-        this.classifyMl(lm).then(label => {
-          if (label) {
-            this.asl.buf.push(label);
-            if (this.asl.buf.length > this.asl.mx) this.asl.buf.shift();
+        this.classifyMl(lm).then(result => {
+          if (result) {
+            this._mlLabel = result.label;
+            this._mlConf = result.confidence;
           }
         }).finally(() => { this._mlBusy = false; });
       }
-      [com, sign] = this.asl.update(lm);
-    } else this.asl.reset();
+      const forced = useMl ? this._mlLabel : null;
+      [com, sign] = this.asl.update(lm, forced);
+    } else {
+      this.asl.reset();
+      this._mlLabel = null;
+      this._mlConf = 0;
+    }
 
     if (com) {
       this.flash = 15; this.signs++;
@@ -1917,6 +1966,7 @@ class App {
   doMode() {
     const m = this.asl.toggle();
     if (m === 'PHRASE' && this.word) { this.sentence += (this.sentence ? ' ' : '') + this.word; this.word = ''; this.words++; }
+    this._mlLabel = null;
     this.fillCollectLabels();
     this.log('Switched to ' + m + ' mode', 'letter');
   }

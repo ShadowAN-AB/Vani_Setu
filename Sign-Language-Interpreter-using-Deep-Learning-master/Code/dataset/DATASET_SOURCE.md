@@ -6,29 +6,29 @@
 **Format:** MediaPipe Hand Landmarker 21 points (x, y, z) per sample  
 **Converted to:** `landmarks.csv` with wrist-relative 63-D features (same as app `/api/collect`)
 
-## What we have locally
+## Local letter set (Spell / ML)
 
 | Item | Value |
 |------|--------|
-| Samples | 1779 |
-| Letters | A–W (23 classes) |
-| Held out accuracy | ~89% (RandomForest) |
+| Samples | **2122** |
+| Letters | **A–Z** (26 classes) |
+| Held-out accuracy | **~88%** (RandomForest) |
 | Model file | `models/sign_rf.joblib` |
 
-X / Y / Z were incomplete because Hugging Face rate-limited the download mid-way. You can re-download later and re-run conversion + `train_classifier.py`.
+Static landmarks struggle with motion letters (**J**, **Z**). Live app uses ML in Spell mode with a **0.25** confidence floor, rule fallback, and multi-frame voting.
 
-## Important for your college report
+## Phrase / ISL samples (your contribution)
 
-- This is **ASL fingerspelling letters**, not ISL phrases.
-- **Spell mode** can use the ML model once the Flask server loads `sign_rf.joblib`.
-- **Phrase / ISL modes** still use rule-based poses unless you record your own samples in the Dataset panel.
-- Static landmarks struggle with motion letters (J, Z).
+Phrase recordings go to **`landmarks_phrases.csv`** (separate from letters) so they do not confuse the A–Z model.
 
-## How it was prepared
+See **`RECORDING_GUIDE.md`** in this folder.
 
-1. Download Hugging Face dataset into `dataset/raw_asl_now/`
-2. Convert JSON landmarks → wrist-relative 63 floats → `landmarks.csv`
-3. Train: `python train_classifier.py`
+## How to rebuild the letter model
+
+```bash
+cd Sign-Language-Interpreter-using-Deep-Learning-master/Code
+.venv/bin/python train_classifier.py
+```
 
 ## Citation
 

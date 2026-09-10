@@ -51,7 +51,9 @@ def main():
         print("Need at least two different signs to train.")
         sys.exit(1)
 
-    x = df.drop(columns=["label"])
+    # Fit on a plain array so the model never stores pandas feature names;
+    # the Flask API predicts from raw landmark lists.
+    x = df.drop(columns=["label"]).to_numpy(dtype="float32")
     y = df["label"]
     x_train, x_test, y_train, y_test = train_test_split(
         x, y, test_size=0.25, random_state=42, stratify=y

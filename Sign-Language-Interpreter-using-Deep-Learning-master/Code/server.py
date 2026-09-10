@@ -42,6 +42,22 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(APP_DIR, "dataset")
 MODEL_PATH = os.path.join(APP_DIR, "models", "sign_rf.joblib")
 CSV_PATH = os.path.join(DATA_DIR, "landmarks.csv")
+PHRASE_CSV_PATH = os.path.join(DATA_DIR, "landmarks_phrases.csv")
+TARGET_SAMPLES_PER_LABEL = 25
+
+
+def _count_csv_rows(path):
+    if not os.path.exists(path):
+        return 0
+    with open(path, encoding="utf-8") as f:
+        return max(0, sum(1 for _ in f) - 1)
+
+
+def _count_label(path, label):
+    if not os.path.exists(path):
+        return 0
+    with open(path, encoding="utf-8") as f:
+        return sum(1 for row in csv.DictReader(f) if row.get("label") == label)
 
 SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
@@ -284,17 +300,30 @@ def get_signs():
     return jsonify({"success": True, "catalog": catalog()})
 
 
+@app.route("/api/health", methods=["GET"])
+def health():
+    checks = {
+        "server": True,
+        "model_loaded": ml_model is not None,
+        "dataset_letters": _count_csv_rows(CSV_PATH),
+        "dataset_phrases": _count_csv_rows(PHRASE_CSV_PATH),
+        "hand_model_file": os.path.exists(os.path.join(APP_DIR, "hand_landmarker.task")),
+        "translator": TRANSLATOR_AVAILABLE,
+        "email_configured": bool(SMTP_USER and SMTP_PASS),
+    }
+    ready = checks["model_loaded"] and checks["hand_model_file"]
+    return jsonify({"success": True, "ready_for_demo": ready, "checks": checks})
+
+
 @app.route("/api/model-status", methods=["GET"])
 def model_status():
-    samples = 0
-    if os.path.exists(CSV_PATH):
-        with open(CSV_PATH, encoding="utf-8") as f:
-            samples = max(0, sum(1 for _ in f) - 1)
     return jsonify({
         "success": True,
         "model_loaded": ml_model is not None,
         "model_path": os.path.relpath(MODEL_PATH, APP_DIR) if os.path.exists(MODEL_PATH) else None,
-        "samples": samples,
+        "samples": _count_csv_rows(CSV_PATH),
+        "phrase_samples": _count_csv_rows(PHRASE_CSV_PATH),
+        "target_per_label": TARGET_SAMPLES_PER_LABEL,
     })
 
 
@@ -308,6 +337,12 @@ def collect_sample():
     if not label or label == "?":
         return jsonify({"success": False, "message": "Pick a sign label first"}), 400
 
+    # Keep phrase samples out of the letter CSV so Spell ML stays clean
+    kind = str(data.get("kind") or "letter").strip().lower()
+    if kind not in ("letter", "phrase"):
+        kind = "letter"
+    path = PHRASE_CSV_PATH if kind == "phrase" else CSV_PATH
+
     try:
         feats = landmarks_to_features(data["landmarks"])
     except ValueError as e:
@@ -316,17 +351,24 @@ def collect_sample():
     os.makedirs(DATA_DIR, exist_ok=True)
     header = ["label"] + [f"f{i}" for i in range(len(feats))]
     with csv_lock:
-        new_file = not os.path.exists(CSV_PATH)
-        with open(CSV_PATH, "a", newline="", encoding="utf-8") as f:
+        new_file = not os.path.exists(path)
+        with open(path, "a", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             if new_file:
                 writer.writerow(header)
             writer.writerow([label] + feats)
-        with open(CSV_PATH, encoding="utf-8") as f:
-            count = max(0, sum(1 for _ in f) - 1)
-            label_count = sum(1 for row in csv.DictReader(open(CSV_PATH, encoding="utf-8")) if row.get("label") == label)
+        count = _count_csv_rows(path)
+        label_count = _count_label(path, label)
 
-    return jsonify({"success": True, "samples": count, "label_count": label_count, "label": label})
+    return jsonify({
+        "success": True,
+        "samples": count,
+        "label_count": label_count,
+        "label": label,
+        "kind": kind,
+        "target": TARGET_SAMPLES_PER_LABEL,
+        "path": os.path.basename(path),
+    })
 
 
 @app.route("/api/classify", methods=["POST"])
