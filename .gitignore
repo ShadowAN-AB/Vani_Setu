@@ -2,3 +2,11 @@ __pycache__/
 *.pyc
 .venv/
 hand_landmarker.task
+.env
+.DS_Store
+Sign-Language-Interpreter-using-Deep-Learning-master/Code/dataset/landmarks.csv
+Sign-Language-Interpreter-using-Deep-Learning-master/Code/dataset/raw_asl_now/
+Sign-Language-Interpreter-using-Deep-Learning-master/Code/models/*.joblib
+Sign-Language-Interpreter-using-Deep-Learning-master/Code/reports/*.png
+Sign-Language-Interpreter-using-Deep-Learning-master/Code/reports/*.json
+Sign-Language-Interpreter-using-Deep-Learning-master/Code/reports/*.txt

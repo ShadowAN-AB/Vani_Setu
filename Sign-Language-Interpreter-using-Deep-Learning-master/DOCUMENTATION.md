@@ -1,6 +1,24 @@
 # Vani-Setu — Project Documentation
 
-**Vani-Setu** (*voice-bridge*) is a real-time American Sign Language (ASL) translator. A camera captures hand signs, the app classifies them, builds words and sentences, speaks the result, and can translate the English output into 25+ languages.
+**Vani-Setu** (*voice-bridge*) is a real-time sign language translator for **ASL and simplified ISL**. A camera captures hand signs, the app classifies them, builds words and sentences, speaks the result, and can translate the English output into 25+ languages.
+
+## College iteration (what to demo)
+
+1. Switch **INPUT** to **ISL** and use the Sign Guide for classroom poses (Namaste, Thank You, Water, Help, …).
+2. Use **Record dataset** while holding a sign. Samples are saved to `Code/dataset/landmarks.csv`.
+3. Train and get a confusion matrix:
+
+```bash
+cd Sign-Language-Interpreter-using-Deep-Learning-master/Code
+.venv/bin/pip install -r requirements_web.txt
+.venv/bin/python train_classifier.py
+```
+
+Restart the server. The **ML MODEL** badge appears when `models/sign_rf.joblib` loads. Put `reports/confusion_matrix.png` and `reports/metrics.json` in your report.
+
+4. Start on macOS / Linux: `./run.sh` from the `Vani-Setu` folder (defaults to port **5001**).
+5. Copy `Code/.env.example` to `Code/.env` for email OTP. If SMTP is empty, the OTP is printed in the terminal.
+6. Hindi translation falls back to a local phrase list when Google Translate fails.
 
 This document describes the codebase as it exists today: what it is, how it is built, what actually works, and what is incomplete.
 

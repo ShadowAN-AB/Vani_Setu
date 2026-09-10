@@ -1,169 +1,155 @@
 """
-Vani-Setu OTP Authentication + Translation Backend
-====================================================
-Flask server providing:
-  - POST /api/send-otp   → Generate & email a 6-digit OTP
-  - POST /api/verify-otp → Verify OTP
-  - POST /api/translate   → Translate text to target language
-  - GET  /               → Serve index.html
-
-OTP is stored in-memory with 5-minute expiry.
-Email sending uses smtplib (Gmail App Password).
-Translation uses deep-translator (Google Translate free API).
+Vani-Setu backend: OTP auth, translation, landmark collection, and ML classify.
 """
 
+import csv
 import os
 import random
+import re
 import string
 import time
 import smtplib
-import re
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from threading import Lock
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
-# Try to import deep_translator
+from features import landmarks_to_features
+from signs import OFFLINE_HI, catalog
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+except ImportError:
+    pass
+
 try:
     from deep_translator import GoogleTranslator
     TRANSLATOR_AVAILABLE = True
 except ImportError:
     TRANSLATOR_AVAILABLE = False
-    print("  [WARN] deep-translator not installed. Run: pip install deep-translator")
+    print("  [WARN] deep-translator not installed.")
 
-# ==============================================================
-# CONFIG
-# ==============================================================
+try:
+    import joblib
+    JOBLIB_OK = True
+except ImportError:
+    JOBLIB_OK = False
+
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(APP_DIR, "dataset")
+MODEL_PATH = os.path.join(APP_DIR, "models", "sign_rf.joblib")
+CSV_PATH = os.path.join(DATA_DIR, "landmarks.csv")
 
-# Email config — Gmail App Password
 SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
-SMTP_USER = os.environ.get("SMTP_USER", "shrivastavakartikeya82@gmail.com")
-SMTP_PASS = os.environ.get("SMTP_PASS", "pcczcuxlgvhpqelq")
+SMTP_USER = os.environ.get("SMTP_USER", "").strip()
+SMTP_PASS = os.environ.get("SMTP_PASS", "").strip()
 SENDER_NAME = "Vani-Setu"
+PORT = int(os.environ.get("PORT", "5001"))
 
 OTP_LENGTH = 6
-OTP_EXPIRY_SECONDS = 300  # 5 minutes
+OTP_EXPIRY_SECONDS = 300
 MAX_ATTEMPTS = 5
-RATE_LIMIT_SECONDS = 60   # Min time between OTP sends to same email
+RATE_LIMIT_SECONDS = 60
 
-# Supported languages for translation
 SUPPORTED_LANGUAGES = {
-    "en": "English",
-    "hi": "Hindi",
-    "fr": "French",
-    "es": "Spanish",
-    "de": "German",
-    "ja": "Japanese",
-    "ar": "Arabic",
-    "bn": "Bengali",
-    "ta": "Tamil",
-    "ko": "Korean",
-    "pt": "Portuguese",
-    "ru": "Russian",
-    "zh-CN": "Chinese (Simplified)",
-    "ur": "Urdu",
-    "mr": "Marathi",
-    "te": "Telugu",
-    "gu": "Gujarati",
-    "kn": "Kannada",
-    "ml": "Malayalam",
-    "pa": "Punjabi",
-    "or": "Odia",
-    "it": "Italian",
-    "tr": "Turkish",
-    "th": "Thai",
-    "vi": "Vietnamese",
+    "en": "English", "hi": "Hindi", "fr": "French", "es": "Spanish",
+    "de": "German", "ja": "Japanese", "ar": "Arabic", "bn": "Bengali",
+    "ta": "Tamil", "ko": "Korean", "pt": "Portuguese", "ru": "Russian",
+    "zh-CN": "Chinese (Simplified)", "ur": "Urdu", "mr": "Marathi",
+    "te": "Telugu", "gu": "Gujarati", "kn": "Kannada", "ml": "Malayalam",
+    "pa": "Punjabi", "or": "Odia", "it": "Italian", "tr": "Turkish",
+    "th": "Thai", "vi": "Vietnamese",
 }
 
-# ==============================================================
-# OTP STORE (in-memory)
-# ==============================================================
-otp_store = {}  # email -> {otp, created_at, attempts}
+otp_store = {}
 store_lock = Lock()
-
-# Translation cache to avoid repeated API calls
 translation_cache = {}
 cache_lock = Lock()
+csv_lock = Lock()
 MAX_CACHE_SIZE = 500
+ml_model = None
+
+
+def load_ml_model():
+    global ml_model
+    if not JOBLIB_OK or not os.path.exists(MODEL_PATH):
+        ml_model = None
+        return
+    try:
+        ml_model = joblib.load(MODEL_PATH)
+        print(f"  [OK] Loaded classifier: {MODEL_PATH}")
+    except Exception as e:
+        ml_model = None
+        print(f"  [WARN] Could not load model: {e}")
 
 
 def generate_otp():
-    return ''.join(random.choices(string.digits, k=OTP_LENGTH))
+    return "".join(random.choices(string.digits, k=OTP_LENGTH))
 
 
 def cleanup_expired():
-    """Remove expired OTP entries."""
     now = time.time()
-    expired = [k for k, v in otp_store.items() if now - v['created_at'] > OTP_EXPIRY_SECONDS]
+    expired = [k for k, v in otp_store.items() if now - v["created_at"] > OTP_EXPIRY_SECONDS]
     for k in expired:
         del otp_store[k]
 
 
 def send_email_otp(email, otp):
-    """Send OTP via email. Returns True on success."""
     if not SMTP_USER or not SMTP_PASS:
-        print(f"\n{'='*50}")
+        print(f"\n{'=' * 50}")
         print(f"  OTP for {email}: {otp}")
-        print(f"  (Email not configured - showing in console)")
-        print(f"{'='*50}\n")
-        return True  # Treat as success for demo
+        print("  (Email not configured — use the code above)")
+        print(f"{'=' * 50}\n")
+        return False
 
     try:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"🤟 Vani-Setu Login OTP: {otp}"
+        msg["Subject"] = f"Vani-Setu Login OTP: {otp}"
         msg["From"] = f"{SENDER_NAME} <{SMTP_USER}>"
         msg["To"] = email
-
         html = f"""
-        <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:480px;margin:0 auto;
-                    background:#0a0a14;color:#e8e8f0;padding:40px;border-radius:16px;
-                    border:1px solid rgba(168,85,247,0.3);">
-            <div style="text-align:center;margin-bottom:24px;">
-                <span style="font-size:36px;">🤟</span>
-                <h1 style="background:linear-gradient(135deg,#a855f7,#06b6d4);
-                           -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-                           font-size:28px;margin:8px 0 0;">Vani-Setu</h1>
-                <p style="color:#888;font-size:13px;letter-spacing:2px;">SIGN LANGUAGE TRANSLATOR</p>
-            </div>
-            <div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);
-                        border-radius:12px;padding:24px;text-align:center;margin:20px 0;">
-                <p style="color:#aaa;font-size:14px;margin:0 0 12px;">Your verification code:</p>
-                <div style="font-size:36px;font-weight:900;letter-spacing:12px;color:#a855f7;">
-                    {otp}
-                </div>
-                <p style="color:#666;font-size:12px;margin:12px 0 0;">Expires in 5 minutes</p>
-            </div>
-            <p style="color:#666;font-size:12px;text-align:center;">
-                If you didn't request this code, please ignore this email.
-            </p>
+        <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px;">
+          <h2>Vani-Setu</h2>
+          <p>Your verification code:</p>
+          <p style="font-size:28px;letter-spacing:8px;font-weight:800;">{otp}</p>
+          <p>Expires in 5 minutes.</p>
         </div>
         """
         msg.attach(MIMEText(html, "html"))
-
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=12) as server:
             server.starttls()
             server.login(SMTP_USER, SMTP_PASS)
             server.sendmail(SMTP_USER, email, msg.as_string())
-
         print(f"  [OK] OTP email sent to {email}")
-        print(f"  OTP for {email}: {otp}")
         return True
-
     except Exception as e:
         print(f"  [ERROR] Email send failed: {e}")
-        print(f"  OTP for {email}: {otp} (showing in console as fallback)")
-        return True  # Still return True so user can use console OTP
+        print(f"  OTP for {email}: {otp} (console fallback)")
+        return False
 
 
-# ==============================================================
-# FLASK APP
-# ==============================================================
+def offline_translate(text, target):
+    if target != "hi":
+        return None
+    words = re.split(r"(\s+)", text)
+    out = []
+    for w in words:
+        key = w.strip(".,!?").lower()
+        if key in OFFLINE_HI:
+            out.append(OFFLINE_HI[key])
+        else:
+            out.append(w)
+    joined = "".join(out).strip()
+    return joined if joined and joined.lower() != text.lower() else None
+
+
 app = Flask(__name__, static_folder=APP_DIR)
 CORS(app)
+load_ml_model()
 
 
 @app.route("/")
@@ -183,39 +169,31 @@ def send_otp():
         return jsonify({"success": False, "message": "Email is required"}), 400
 
     email = data["email"].strip().lower()
-
-    # Basic email validation
-    if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+    if not re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email):
         return jsonify({"success": False, "message": "Invalid email format"}), 400
 
     with store_lock:
         cleanup_expired()
-
-        # Rate limiting
         if email in otp_store:
-            elapsed = time.time() - otp_store[email]['created_at']
+            elapsed = time.time() - otp_store[email]["created_at"]
             if elapsed < RATE_LIMIT_SECONDS:
                 remaining = int(RATE_LIMIT_SECONDS - elapsed)
                 return jsonify({
                     "success": False,
-                    "message": f"Please wait {remaining}s before requesting a new OTP"
+                    "message": f"Please wait {remaining}s before requesting a new OTP",
                 }), 429
 
         otp = generate_otp()
-        otp_store[email] = {
-            "otp": otp,
-            "created_at": time.time(),
-            "attempts": 0
-        }
+        otp_store[email] = {"otp": otp, "created_at": time.time(), "attempts": 0}
         print(f"  [OTP] {email} -> {otp}", flush=True)
 
-    # Send email (or print to console)
-    send_email_otp(email, otp)
-
-    return jsonify({
-        "success": True,
-        "message": "OTP sent successfully! Check your email."
-    })
+    emailed = send_email_otp(email, otp)
+    message = (
+        "OTP sent to your email."
+        if emailed
+        else "OTP printed in the server terminal (email is not configured)."
+    )
+    return jsonify({"success": True, "message": message, "console_otp": not emailed})
 
 
 @app.route("/api/verify-otp", methods=["POST"])
@@ -229,38 +207,25 @@ def verify_otp():
 
     with store_lock:
         cleanup_expired()
-
         if email not in otp_store:
             return jsonify({"success": False, "message": "OTP expired or not found. Request a new one."}), 400
-
         entry = otp_store[email]
-
-        # Check expiry
         if time.time() - entry["created_at"] > OTP_EXPIRY_SECONDS:
             del otp_store[email]
             return jsonify({"success": False, "message": "OTP has expired. Request a new one."}), 400
-
-        # Check attempts
         if entry["attempts"] >= MAX_ATTEMPTS:
             del otp_store[email]
             return jsonify({"success": False, "message": "Too many attempts. Request a new OTP."}), 400
-
-        # Verify
         if user_otp == entry["otp"]:
-            del otp_store[email]  # One-time use
+            del otp_store[email]
             return jsonify({"success": True, "message": "Login successful! Welcome to Vani-Setu."})
-        else:
-            entry["attempts"] += 1
-            remaining = MAX_ATTEMPTS - entry["attempts"]
-            return jsonify({
-                "success": False,
-                "message": f"Incorrect OTP. {remaining} attempts remaining."
-            }), 400
+        entry["attempts"] += 1
+        remaining = MAX_ATTEMPTS - entry["attempts"]
+        return jsonify({"success": False, "message": f"Incorrect OTP. {remaining} attempts remaining."}), 400
 
 
 @app.route("/api/translate", methods=["POST"])
 def translate_text():
-    """Translate text from English to target language."""
     data = request.get_json(silent=True)
     if not data or "text" not in data or "target" not in data:
         return jsonify({"success": False, "message": "text and target language are required"}), 400
@@ -270,71 +235,137 @@ def translate_text():
     source = data.get("source", "en").strip()
 
     if not text:
-        return jsonify({"success": True, "translated": ""})
-
-    # If target is same as source, return as-is
+        return jsonify({"success": True, "translated": "", "source": "empty"})
     if target == source:
-        return jsonify({"success": True, "translated": text})
-
+        return jsonify({"success": True, "translated": text, "source": "same"})
     if target not in SUPPORTED_LANGUAGES:
         return jsonify({"success": False, "message": f"Unsupported language: {target}"}), 400
 
-    if not TRANSLATOR_AVAILABLE:
-        return jsonify({
-            "success": False,
-            "message": "Translation service not available. Install: pip install deep-translator"
-        }), 500
-
-    # Check cache
     cache_key = f"{source}:{target}:{text}"
     with cache_lock:
         if cache_key in translation_cache:
-            return jsonify({"success": True, "translated": translation_cache[cache_key]})
+            return jsonify({"success": True, "translated": translation_cache[cache_key], "source": "cache"})
 
-    try:
-        translator = GoogleTranslator(source=source, target=target)
-        translated = translator.translate(text)
+    translated = None
+    used = None
+    if TRANSLATOR_AVAILABLE:
+        try:
+            translated = GoogleTranslator(source=source, target=target).translate(text)
+            used = "google"
+        except Exception as e:
+            print(f"  [ERROR] Translation failed: {e}")
 
-        # Cache result
-        with cache_lock:
-            if len(translation_cache) >= MAX_CACHE_SIZE:
-                # Remove oldest entries (simple FIFO)
-                keys = list(translation_cache.keys())
-                for k in keys[:100]:
-                    del translation_cache[k]
-            translation_cache[cache_key] = translated
+    if not translated:
+        translated = offline_translate(text, target)
+        used = "offline" if translated else None
 
-        return jsonify({"success": True, "translated": translated})
+    if not translated:
+        return jsonify({
+            "success": False,
+            "message": "Translation unavailable. Offline Hindi works for known signs.",
+        }), 503
 
-    except Exception as e:
-        print(f"  [ERROR] Translation failed: {e}")
-        return jsonify({"success": False, "message": f"Translation error: {str(e)}"}), 500
+    with cache_lock:
+        if len(translation_cache) >= MAX_CACHE_SIZE:
+            for k in list(translation_cache.keys())[:100]:
+                del translation_cache[k]
+        translation_cache[cache_key] = translated
+
+    return jsonify({"success": True, "translated": translated, "source": used})
 
 
 @app.route("/api/languages", methods=["GET"])
 def get_languages():
-    """Return list of supported languages."""
     return jsonify({"success": True, "languages": SUPPORTED_LANGUAGES})
 
 
-# ==============================================================
-# ENTRY POINT
-# ==============================================================
+@app.route("/api/signs", methods=["GET"])
+def get_signs():
+    return jsonify({"success": True, "catalog": catalog()})
+
+
+@app.route("/api/model-status", methods=["GET"])
+def model_status():
+    samples = 0
+    if os.path.exists(CSV_PATH):
+        with open(CSV_PATH, encoding="utf-8") as f:
+            samples = max(0, sum(1 for _ in f) - 1)
+    return jsonify({
+        "success": True,
+        "model_loaded": ml_model is not None,
+        "model_path": os.path.relpath(MODEL_PATH, APP_DIR) if os.path.exists(MODEL_PATH) else None,
+        "samples": samples,
+    })
+
+
+@app.route("/api/collect", methods=["POST"])
+def collect_sample():
+    data = request.get_json(silent=True)
+    if not data or "label" not in data or "landmarks" not in data:
+        return jsonify({"success": False, "message": "label and landmarks are required"}), 400
+
+    label = str(data["label"]).strip()
+    if not label or label == "?":
+        return jsonify({"success": False, "message": "Pick a sign label first"}), 400
+
+    try:
+        feats = landmarks_to_features(data["landmarks"])
+    except ValueError as e:
+        return jsonify({"success": False, "message": str(e)}), 400
+
+    os.makedirs(DATA_DIR, exist_ok=True)
+    header = ["label"] + [f"f{i}" for i in range(len(feats))]
+    with csv_lock:
+        new_file = not os.path.exists(CSV_PATH)
+        with open(CSV_PATH, "a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            if new_file:
+                writer.writerow(header)
+            writer.writerow([label] + feats)
+        with open(CSV_PATH, encoding="utf-8") as f:
+            count = max(0, sum(1 for _ in f) - 1)
+            label_count = sum(1 for row in csv.DictReader(open(CSV_PATH, encoding="utf-8")) if row.get("label") == label)
+
+    return jsonify({"success": True, "samples": count, "label_count": label_count, "label": label})
+
+
+@app.route("/api/classify", methods=["POST"])
+def classify_landmarks():
+    if ml_model is None:
+        return jsonify({"success": False, "message": "No trained model yet. Record samples and run train_classifier.py"}), 404
+
+    data = request.get_json(silent=True)
+    if not data or "landmarks" not in data:
+        return jsonify({"success": False, "message": "landmarks required"}), 400
+
+    try:
+        feats = landmarks_to_features(data["landmarks"])
+    except ValueError as e:
+        return jsonify({"success": False, "message": str(e)}), 400
+
+    try:
+        pred = ml_model.predict([feats])[0]
+        proba = None
+        if hasattr(ml_model, "predict_proba"):
+            probs = ml_model.predict_proba([feats])[0]
+            classes = list(ml_model.classes_)
+            idx = classes.index(pred)
+            proba = float(probs[idx])
+        return jsonify({"success": True, "label": str(pred), "confidence": proba})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+
 if __name__ == "__main__":
     print()
     print("  +===============================================+")
-    print("  |     Vani-Setu Authentication + Translation    |")
-    print("  |     ----------------------------------------- |")
+    print("  |     Vani-Setu                                 |")
     if SMTP_USER:
-        print(f"  |     Email: {SMTP_USER:<34} |")
+        print(f"  |     Email: {SMTP_USER[:34]:<34} |")
     else:
-        print("  |     No email configured (console OTP)        |")
-    if TRANSLATOR_AVAILABLE:
-        print(f"  |     Translation: {len(SUPPORTED_LANGUAGES)} languages available     |")
-    else:
-        print("  |     Translation: NOT AVAILABLE (install pkg)  |")
-    print("  |     http://localhost:5000                     |")
+        print("  |     OTP: printed in this terminal             |")
+    print(f"  |     ML model: {'loaded':<32} |" if ml_model is not None else "  |     ML model: not trained yet               |")
+    print(f"  |     http://127.0.0.1:{PORT:<22} |")
     print("  +===============================================+")
     print()
-
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="127.0.0.1", port=PORT, debug=False)
