@@ -12,10 +12,12 @@
 |------|--------|
 | Samples | **2122** |
 | Letters | **A–Z** (26 classes) |
-| Held-out accuracy | **~88%** (RandomForest) |
+| Held-out accuracy | **95.1%** (RBF SVM) |
 | Model file | `models/sign_rf.joblib` |
 
-Static landmarks struggle with motion letters (**J**, **Z**). Live app uses ML in Spell mode with a **0.25** confidence floor, rule fallback, and multi-frame voting.
+The SVM was picked by measurement, not preference — see `reports/model_comparison.md` (SVM 95.1% vs Random Forest 88.1%, KNN 85.7%, Decision Tree 74.6%).
+
+Static landmarks struggle with motion letters (**J**, **Z**). Live app uses ML in Spell mode with a **0.50** confidence floor, rule fallback, and multi-frame voting.
 
 ## Phrase / ISL samples (your contribution)
 

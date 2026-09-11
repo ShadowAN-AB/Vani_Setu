@@ -3,10 +3,13 @@ Vani-Setu backend: OTP auth, translation, landmark collection, and ML classify.
 """
 
 import csv
+import json
 import os
 import random
 import re
 import string
+import subprocess
+import sys
 import time
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -86,6 +89,7 @@ store_lock = Lock()
 translation_cache = {}
 cache_lock = Lock()
 csv_lock = Lock()
+train_lock = Lock()
 MAX_CACHE_SIZE = 500
 ml_model = None
 
@@ -369,6 +373,51 @@ def collect_sample():
         "target": TARGET_SAMPLES_PER_LABEL,
         "path": os.path.basename(path),
     })
+
+
+@app.route("/api/train", methods=["POST"])
+def train_model():
+    """Run train_classifier.py and hot-reload the model, so a demo never needs a terminal."""
+    if not train_lock.acquire(blocking=False):
+        return jsonify({"success": False, "message": "Training already in progress"}), 409
+
+    try:
+        script = os.path.join(APP_DIR, "train_classifier.py")
+        proc = subprocess.run(
+            [sys.executable, script],
+            cwd=APP_DIR,
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+        if proc.returncode != 0:
+            tail = (proc.stdout or proc.stderr or "").strip().splitlines()
+            return jsonify({
+                "success": False,
+                "message": tail[-1] if tail else "Training failed",
+            }), 500
+
+        load_ml_model()
+
+        metrics = {}
+        metrics_path = os.path.join(APP_DIR, "reports", "metrics.json")
+        if os.path.exists(metrics_path):
+            with open(metrics_path, encoding="utf-8") as f:
+                metrics = json.load(f)
+
+        return jsonify({
+            "success": True,
+            "accuracy": metrics.get("accuracy"),
+            "n_samples": metrics.get("n_samples"),
+            "n_classes": metrics.get("n_classes"),
+            "model_loaded": ml_model is not None,
+        })
+    except subprocess.TimeoutExpired:
+        return jsonify({"success": False, "message": "Training timed out"}), 504
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        train_lock.release()
 
 
 @app.route("/api/classify", methods=["POST"])

@@ -12,7 +12,7 @@
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
-      --ink: #102 intermediate;
+      --ink: #10292d;
       --ink-soft: #3d4f52;
       --muted: #6b7c7f;
       --line: #d5e0e2;
@@ -602,6 +602,65 @@
     .word-label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; color: var(--muted); }
     .word-text { font-size: 15px; font-weight: 700; color: var(--sky); }
 
+    .conf-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 22px; border-top: 1px solid var(--line); background: #fff;
+    }
+    .conf-label {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.1em; color: var(--muted);
+      white-space: nowrap;
+    }
+    .conf-track {
+      flex: 1; height: 8px; border-radius: 99px;
+      background: var(--paper-deep); overflow: hidden;
+    }
+    .conf-fill {
+      height: 100%; width: 0%; border-radius: 99px;
+      background: var(--line-strong);
+      transition: width 0.12s linear, background 0.2s;
+    }
+    .conf-fill.mid { background: var(--amber); }
+    .conf-fill.high { background: var(--success); }
+    .conf-val {
+      font-size: 12px; font-weight: 700; color: var(--ink-soft);
+      min-width: 58px; text-align: right; font-variant-numeric: tabular-nums;
+    }
+
+    .suggest-bar {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      padding: 10px 22px; border-top: 1px solid var(--line); background: #fafcfc;
+    }
+    .suggest-list { display: flex; gap: 6px; flex-wrap: wrap; }
+    .suggest-chip {
+      padding: 6px 12px; border-radius: 99px;
+      border: 1px solid #9fc5cb; background: var(--teal-soft);
+      color: var(--teal-deep); font-size: 12px; font-weight: 700;
+      font-family: var(--font); cursor: pointer;
+      transition: transform 0.15s, background 0.2s;
+    }
+    .suggest-chip:hover { background: #c8e4e7; transform: translateY(-1px); }
+    .suggest-empty { font-size: 12px; color: var(--muted); }
+
+    .quiz-panel {
+      padding: 16px 22px; border-top: 1px solid var(--line);
+      background: linear-gradient(180deg, #fff, var(--paper));
+    }
+    .quiz-head {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;
+    }
+    .quiz-title {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
+      color: var(--muted); text-transform: uppercase;
+    }
+    .quiz-score { font-size: 12px; font-weight: 700; color: var(--teal-deep); }
+    .quiz-target {
+      font-family: var(--display); font-size: 56px; font-weight: 700;
+      line-height: 1; text-align: center; color: var(--teal); margin: 6px 0;
+    }
+    .quiz-target.correct { color: var(--success); }
+    .quiz-hint { text-align: center; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+    .quiz-actions { display: flex; gap: 6px; }
+
     .ctrl-bar {
       padding: 12px 14px; display: flex; gap: 6px; flex-wrap: wrap;
       border-top: 1px solid var(--line); background: #fff;
@@ -882,6 +941,7 @@
             <div class="collect-bar">
               <select id="collectLabel"></select>
               <button id="btnRecord">Record dataset</button>
+              <button id="btnTrain">Retrain model</button>
               <span id="collectStat" style="font-size:11px;color:var(--muted);">0 samples</span>
               <span id="collectHint" style="font-size:11px;color:var(--muted);">Aim for ~25 samples per sign</span>
             </div>
@@ -928,9 +988,33 @@
             <div class="trans-secondary-text" id="transSecondaryText">...</div>
           </div>
 
+          <div class="conf-row" id="confRow" style="display:none;">
+            <span class="conf-label">Model confidence</span>
+            <div class="conf-track"><div class="conf-fill" id="confFill"></div></div>
+            <span class="conf-val" id="confVal">--</span>
+          </div>
+
           <div class="word-bar">
             <span class="word-label">WORD</span>
             <span class="word-text" id="wordText">...</span>
+          </div>
+
+          <div class="suggest-bar" id="suggestBar" style="display:none;">
+            <span class="word-label">SUGGESTIONS</span>
+            <div class="suggest-list" id="suggestList"></div>
+          </div>
+
+          <div class="quiz-panel" id="quizPanel" style="display:none;">
+            <div class="quiz-head">
+              <span class="quiz-title">Practice mode</span>
+              <span class="quiz-score" id="quizScore">0 / 0</span>
+            </div>
+            <div class="quiz-target" id="quizTarget">A</div>
+            <div class="quiz-hint" id="quizHint">Sign this letter and hold it steady</div>
+            <div class="quiz-actions">
+              <button class="ctrl-btn" id="quizSkip">Skip letter</button>
+              <button class="ctrl-btn" id="quizStop">End practice</button>
+            </div>
           </div>
 
           <div class="ctrl-bar">
@@ -940,6 +1024,7 @@
             <button class="ctrl-btn" id="btnEnter">Sentence</button>
             <button class="ctrl-btn" id="btnClear">Clear</button>
             <button class="ctrl-btn voice" id="btnVoice">Voice ON</button>
+            <button class="ctrl-btn" id="btnPractice">Practice</button>
           </div>
 
           <div class="log-section">
@@ -1036,6 +1121,37 @@ const LANGUAGES = [
   { code: 'tr',    name: 'Turkish',              flag: '🇹🇷' },
   { code: 'th',    name: 'Thai',                 flag: '🇹🇭' },
   { code: 'vi',    name: 'Vietnamese',           flag: '🇻🇳' },
+];
+
+// ==============================
+// SPELL AUTOCOMPLETE DICTIONARY
+// Fingerspelling letter by letter is slow, so offer completions.
+// ==============================
+const WORD_LIST = [
+  'HELLO', 'HELP', 'HERE', 'HOME', 'HOW', 'HAPPY', 'HAVE', 'HEAR', 'HAND',
+  'THANK', 'THANKS', 'THE', 'THIS', 'THAT', 'THEY', 'THERE', 'TIME', 'TODAY',
+  'YES', 'YOU', 'YOUR', 'YEAR', 'YESTERDAY',
+  'NO', 'NAME', 'NEED', 'NICE', 'NOW', 'NAMASTE',
+  'PLEASE', 'PEOPLE', 'PLACE', 'PLAY', 'PLEASED',
+  'SORRY', 'SCHOOL', 'SIGN', 'SPEAK', 'STOP', 'START', 'STUDENT', 'SEE',
+  'GOOD', 'GREAT', 'GIVE', 'GOING', 'GOODBYE',
+  'MORNING', 'MOTHER', 'MORE', 'MEET', 'ME', 'MY',
+  'FATHER', 'FRIEND', 'FINE', 'FOOD', 'FROM',
+  'WATER', 'WANT', 'WHAT', 'WHEN', 'WHERE', 'WHO', 'WHY', 'WORK', 'WELCOME',
+  'LOVE', 'LEARN', 'LIKE', 'LITTLE', 'LOOK',
+  'COLLEGE', 'COME', 'CAN', 'CALL',
+  'TEACHER', 'TALK', 'TAKE',
+  'DOCTOR', 'DAY', 'DEAF',
+  'BOOK', 'BROTHER', 'BECAUSE',
+  'SISTER', 'SLEEP', 'SMALL',
+  'INDIA', 'IS', 'IT',
+  'AND', 'ARE', 'ASK', 'AGAIN',
+  'EAT', 'EVENING', 'EXCUSE',
+  'PROJECT', 'PRACTICE',
+  'READ', 'REPEAT', 'RIGHT',
+  'UNDERSTAND', 'US',
+  'VERY', 'VISIT',
+  'OK', 'OPEN', 'OUR',
 ];
 
 // ==============================
@@ -1581,7 +1697,10 @@ class App {
     this.mlReady = false; this.collecting = false; this.collectEvery = 0;
     this.lastLm = null; this.catalog = null;
     this._mlBusy = false; this._mlLabel = null; this._mlConf = 0;
-    this.ML_MIN_CONF = 0.25; // RF probs dilute with 26 classes; buffer voting filters noise
+    // SVM probabilities are calibrated: 0.50 keeps ~96% of correct predictions
+    // while rejecting ~69% of errors. Frame voting filters what gets through.
+    this.ML_MIN_CONF = 0.50;
+    this.quiz = null;
   }
 
   async init() {
@@ -1657,6 +1776,10 @@ class App {
       tab.onclick = () => this.setInputLang(tab.dataset.input);
     });
     document.getElementById('btnRecord').onclick = () => this.toggleRecord();
+    document.getElementById('btnTrain').onclick = () => this.retrainModel();
+    document.getElementById('btnPractice').onclick = () => this.startQuiz();
+    document.getElementById('quizSkip').onclick = () => this.nextQuizTarget(true);
+    document.getElementById('quizStop').onclick = () => this.stopQuiz();
     this.loadCatalog();
     this.refreshModelStatus();
 
@@ -1713,6 +1836,149 @@ class App {
       hint.textContent = this.asl.mode === 'SPELL'
         ? 'Spell recording → landmarks.csv (letter model)'
         : 'Phrase recording → landmarks_phrases.csv (your data)';
+    }
+  }
+
+  renderConfidence(handVisible) {
+    const row = document.getElementById('confRow');
+    const useMl = this.mlReady && this.asl.mode === 'SPELL';
+    if (!useMl) { row.style.display = 'none'; return; }
+    row.style.display = 'flex';
+    const pct = handVisible && this._mlLabel ? Math.round(this._mlConf * 100) : 0;
+    const fill = document.getElementById('confFill');
+    fill.style.width = pct + '%';
+    fill.className = 'conf-fill' + (pct >= 60 ? ' high' : pct >= 30 ? ' mid' : '');
+    document.getElementById('confVal').textContent =
+      pct && this._mlLabel ? `${this._mlLabel} ${pct}%` : '--';
+  }
+
+  // ---- Spell autocomplete ----
+  suggestions() {
+    if (this.asl.mode !== 'SPELL' || this.word.length < 2) return [];
+    const p = this.word.toUpperCase();
+    return WORD_LIST.filter(w => w.startsWith(p) && w !== p).slice(0, 4);
+  }
+
+  renderSuggestions() {
+    const bar = document.getElementById('suggestBar');
+    const list = document.getElementById('suggestList');
+    const items = this.suggestions();
+    if (!items.length) { bar.style.display = 'none'; return; }
+    bar.style.display = 'flex';
+    if (list.dataset.shown === items.join(',')) return;
+    list.dataset.shown = items.join(',');
+    list.innerHTML = '';
+    for (const w of items) {
+      const b = document.createElement('button');
+      b.className = 'suggest-chip';
+      b.textContent = w;
+      b.onclick = () => this.acceptSuggestion(w);
+      list.appendChild(b);
+    }
+  }
+
+  acceptSuggestion(w) {
+    this.word = w;
+    this.sentence += (this.sentence ? ' ' : '') + w;
+    this.word = '';
+    this.words++;
+    this.voice.speak(w);
+    this.log('Completed: ' + w, 'sign');
+    document.getElementById('suggestBar').style.display = 'none';
+  }
+
+  // ---- Practice mode ----
+  startQuiz() {
+    if (this.quiz) { this.stopQuiz(); return; }
+    if (this.asl.mode !== 'SPELL') this.doMode();
+    this.quiz = { target: null, correct: 0, asked: 0, streak: 0, best: 0, locked: 0 };
+    document.getElementById('quizPanel').style.display = 'block';
+    document.getElementById('btnPractice').classList.add('gold');
+    this.nextQuizTarget();
+    showToast('Practice mode: sign the letter shown below', 'info', 3000);
+  }
+
+  stopQuiz() {
+    if (!this.quiz) return;
+    const { correct, asked, best } = this.quiz;
+    this.quiz = null;
+    document.getElementById('quizPanel').style.display = 'none';
+    document.getElementById('btnPractice').classList.remove('gold');
+    const pct = asked ? Math.round(100 * correct / asked) : 0;
+    showToast(`Practice done — ${correct}/${asked} correct (${pct}%), best streak ${best}`, 'success', 5000);
+    this.log(`Practice: ${correct}/${asked} correct, best streak ${best}`, 'sign');
+  }
+
+  nextQuizTarget(skipped = false) {
+    if (!this.quiz) return;
+    // Motion letters need a trajectory, so they are unfair in a static-pose quiz
+    const pool = 'ABCDEFGHIKLMNOPQRSTUVWXY'.split('');
+    let next = this.quiz.target;
+    while (next === this.quiz.target) next = pool[Math.floor(Math.random() * pool.length)];
+    if (skipped) { this.quiz.asked++; this.quiz.streak = 0; }
+    this.quiz.target = next;
+    this.quiz.locked = 0;
+    const el = document.getElementById('quizTarget');
+    el.textContent = next;
+    el.classList.remove('correct');
+    document.getElementById('quizHint').textContent =
+      S_INFO[next] || 'Sign this letter and hold it steady';
+    this.renderQuiz();
+  }
+
+  renderQuiz() {
+    if (!this.quiz) return;
+    const { correct, asked, streak } = this.quiz;
+    document.getElementById('quizScore').textContent =
+      `${correct} / ${asked}` + (streak > 1 ? `  ·  streak ${streak}` : '');
+  }
+
+  checkQuizAnswer(committed) {
+    if (!this.quiz || this.quiz.locked) return;
+    this.quiz.asked++;
+    if (committed === this.quiz.target) {
+      this.quiz.correct++;
+      this.quiz.streak++;
+      this.quiz.best = Math.max(this.quiz.best, this.quiz.streak);
+      this.quiz.locked = 1;
+      document.getElementById('quizTarget').classList.add('correct');
+      document.getElementById('quizHint').textContent = 'Correct!';
+      showToast(`Correct: ${committed}`, 'success', 1500);
+      setTimeout(() => this.nextQuizTarget(), 900);
+    } else {
+      this.quiz.streak = 0;
+      document.getElementById('quizHint').textContent =
+        `Read as ${committed}. Try ${this.quiz.target} again.`;
+    }
+    this.renderQuiz();
+  }
+
+  // ---- Retrain from the browser ----
+  async retrainModel() {
+    const btn = document.getElementById('btnTrain');
+    if (btn.disabled) return;
+    btn.disabled = true;
+    const label = btn.textContent;
+    btn.textContent = 'Training…';
+    showToast('Training the classifier, this takes a few seconds…', 'info', 6000);
+    try {
+      const res = await fetch('/api/train', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        showToast(
+          `Model retrained — ${(data.accuracy * 100).toFixed(1)}% on ${data.n_samples} samples, ${data.n_classes} signs`,
+          'success', 6000
+        );
+        this.log(`Retrained: ${(data.accuracy * 100).toFixed(1)}% accuracy`, 'sign');
+        await this.refreshModelStatus();
+      } else {
+        showToast(data.message || 'Training failed', 'error', 6000);
+      }
+    } catch (e) {
+      showToast('Could not reach the training endpoint', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
     }
   }
 
@@ -1864,7 +2130,10 @@ class App {
 
     if (com) {
       this.flash = 15; this.signs++;
-      if (this.asl.mode === 'PHRASE') {
+      if (this.quiz) {
+        // Practice mode scores the letter instead of typing it
+        this.checkQuizAnswer(com);
+      } else if (this.asl.mode === 'PHRASE') {
         if (this.word) { this.sentence += (this.sentence ? ' ' : '') + this.word; this.word = ''; this.words++; }
         this.sentence += (this.sentence ? ' ' : '') + com;
         this.log(com, 'sign');
@@ -1943,6 +2212,8 @@ class App {
     document.getElementById('stWords').textContent = this.words;
     document.getElementById('stSent').textContent = this.sents;
     document.getElementById('fpsBadge').textContent = this.fpsVal + ' FPS';
+    this.renderConfidence(ok);
+    this.renderSuggestions();
 
     // Notify translation controller of text changes
     if (this.translator && full) {

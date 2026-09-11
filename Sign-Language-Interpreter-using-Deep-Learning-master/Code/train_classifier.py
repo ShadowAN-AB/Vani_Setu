@@ -1,5 +1,10 @@
 """
-Train a Random Forest on collected MediaPipe landmarks.
+Train the sign classifier on collected MediaPipe landmarks.
+
+Uses an RBF SVM, which beat Random Forest, KNN, Logistic Regression and a
+Decision Tree on this dataset - see `compare_models.py` and
+`reports/model_comparison.md`. Probability estimates are enabled so the web
+app can show a live confidence bar.
 
 Usage (from Code/):
   .venv/bin/python train_classifier.py
@@ -20,9 +25,11 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 from sklearn.model_selection import train_test_split
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_PATH = os.path.join(APP_DIR, "dataset", "landmarks.csv")
@@ -59,12 +66,9 @@ def main():
         x, y, test_size=0.25, random_state=42, stratify=y
     )
 
-    clf = RandomForestClassifier(
-        n_estimators=180,
-        max_depth=18,
-        min_samples_leaf=2,
-        random_state=42,
-        n_jobs=-1,
+    clf = make_pipeline(
+        StandardScaler(),
+        SVC(C=10, gamma="scale", probability=True, random_state=42),
     )
     clf.fit(x_train, y_train)
     pred = clf.predict(x_test)
@@ -100,7 +104,7 @@ def main():
         "n_classes": int(y.nunique()),
         "labels": labels,
         "per_class_counts": {k: int(v) for k, v in counts.items()},
-        "model": "RandomForestClassifier",
+        "model": "SVC(rbf, C=10) with StandardScaler",
     }
     with open(os.path.join(REPORT_DIR, "metrics.json"), "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=2)
