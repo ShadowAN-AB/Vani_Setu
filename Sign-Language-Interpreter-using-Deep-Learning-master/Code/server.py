@@ -518,12 +518,14 @@ if __name__ == "__main__":
     print(f"  |     Auth: {AUTH_MODE:<36} |")
     if AUTH_MODE == "password":
         print("  |     Login: email + password (SQLite)          |")
-    if EMAIL_CONFIGURED:
-        print(f"  |     Email: {SMTP_USER[:34]:<34} |")
-    elif AUTH_MODE == "otp":
-        print("  |     OTP: terminal (set SMTP or AUTH_MODE)     |")
-    else:
+    elif AUTH_MODE == "guest":
         print("  |     Guest login enabled                       |")
+    elif AUTH_MODE == "none":
+        print("  |     Login screen skipped                      |")
+    elif EMAIL_CONFIGURED:
+        print(f"  |     Email: {SMTP_USER[:34]:<34} |")
+    else:
+        print("  |     OTP: terminal (set SMTP or AUTH_MODE)     |")
     print(f"  |     ML model: {'loaded':<32} |" if ml_model is not None else "  |     ML model: not trained yet               |")
     print(f"  |     http://{HOST}:{PORT:<22} |")
     print("  +===============================================+")
