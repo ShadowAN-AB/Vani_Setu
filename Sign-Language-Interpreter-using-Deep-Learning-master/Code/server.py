@@ -68,6 +68,14 @@ SMTP_USER = os.environ.get("SMTP_USER", "").strip()
 SMTP_PASS = os.environ.get("SMTP_PASS", "").strip()
 SENDER_NAME = "Vani-Setu"
 PORT = int(os.environ.get("PORT", "5001"))
+HOST = os.environ.get("HOST", "127.0.0.1").strip() or "127.0.0.1"
+# otp  = email if SMTP is set, otherwise terminal (local only)
+# guest = OTP plus a "Continue as guest" button (good for a public demo)
+# none  = skip the login screen entirely
+AUTH_MODE = os.environ.get("AUTH_MODE", "otp").strip().lower()
+if AUTH_MODE not in ("otp", "guest", "none"):
+    AUTH_MODE = "otp"
+EMAIL_CONFIGURED = bool(SMTP_USER and SMTP_PASS)
 
 OTP_LENGTH = 6
 OTP_EXPIRY_SECONDS = 300
@@ -180,6 +188,23 @@ def index():
 @app.route("/<path:filename>")
 def static_files(filename):
     return send_from_directory(APP_DIR, filename)
+
+
+@app.route("/api/auth-config", methods=["GET"])
+def auth_config():
+    return jsonify({
+        "success": True,
+        "mode": AUTH_MODE,
+        "email_configured": EMAIL_CONFIGURED,
+        "guest_allowed": AUTH_MODE in ("guest", "none"),
+    })
+
+
+@app.route("/api/guest-login", methods=["POST"])
+def guest_login():
+    if AUTH_MODE not in ("guest", "none"):
+        return jsonify({"success": False, "message": "Guest login is disabled"}), 403
+    return jsonify({"success": True, "email": "guest@vani-setu.local", "message": "Continuing as guest"})
 
 
 @app.route("/api/send-otp", methods=["POST"])
@@ -313,7 +338,8 @@ def health():
         "dataset_phrases": _count_csv_rows(PHRASE_CSV_PATH),
         "hand_model_file": os.path.exists(os.path.join(APP_DIR, "hand_landmarker.task")),
         "translator": TRANSLATOR_AVAILABLE,
-        "email_configured": bool(SMTP_USER and SMTP_PASS),
+        "email_configured": EMAIL_CONFIGURED,
+        "auth_mode": AUTH_MODE,
     }
     ready = checks["model_loaded"] and checks["hand_model_file"]
     return jsonify({"success": True, "ready_for_demo": ready, "checks": checks})
@@ -451,12 +477,15 @@ if __name__ == "__main__":
     print()
     print("  +===============================================+")
     print("  |     Vani-Setu                                 |")
-    if SMTP_USER:
+    print(f"  |     Auth: {AUTH_MODE:<36} |")
+    if EMAIL_CONFIGURED:
         print(f"  |     Email: {SMTP_USER[:34]:<34} |")
+    elif AUTH_MODE == "otp":
+        print("  |     OTP: terminal (set SMTP or AUTH_MODE)     |")
     else:
-        print("  |     OTP: printed in this terminal             |")
+        print("  |     Guest login enabled                       |")
     print(f"  |     ML model: {'loaded':<32} |" if ml_model is not None else "  |     ML model: not trained yet               |")
-    print(f"  |     http://127.0.0.1:{PORT:<22} |")
+    print(f"  |     http://{HOST}:{PORT:<22} |")
     print("  +===============================================+")
     print()
-    app.run(host="127.0.0.1", port=PORT, debug=False)
+    app.run(host=HOST, port=PORT, debug=False)

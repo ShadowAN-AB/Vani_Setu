@@ -13,5 +13,5 @@ pip install -q -r requirements_web.txt
 
 export PORT="${PORT:-5001}"
 echo "Vani-Setu → http://127.0.0.1:${PORT}"
-echo "If email is not set in Code/.env, the OTP is printed here."
+echo "Auth: ${AUTH_MODE:-otp}  (set AUTH_MODE=guest to skip terminal OTP)"
 python server.py

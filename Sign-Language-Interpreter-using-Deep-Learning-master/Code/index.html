@@ -284,6 +284,14 @@
     }
     .btn-send-otp:hover { background: #c8e4e7; }
     .btn-send-otp:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-guest {
+      width: 100%; margin-top: 12px; padding: 12px 16px;
+      border-radius: var(--radius-sm); border: 1px dashed var(--line-strong);
+      background: transparent; color: var(--ink-soft);
+      font-size: 13px; font-weight: 600; font-family: var(--font);
+    }
+    .btn-guest:hover { background: var(--paper); color: var(--teal-deep); }
+    .guest-wrap { display: none; }
     .msg-text { font-size: 13px; color: var(--muted); text-align: left; margin-top: 10px; line-height: 1.6; }
     .msg-text .highlight { color: var(--teal-deep); font-weight: 600; }
     .resend-row { margin-top: 14px; }
@@ -838,7 +846,10 @@
               <button class="btn-send-otp" id="sendOtpBtn">Send OTP</button>
             </div>
           </div>
-          <p class="msg-text">If email is not configured, the code appears in the server terminal.</p>
+          <p class="msg-text" id="loginHint">If email is not configured, the code appears in the server terminal.</p>
+          <div class="guest-wrap" id="guestWrap">
+            <button type="button" class="btn-guest" id="guestBtn">Continue as guest — skip OTP</button>
+          </div>
         </div>
 
         <div class="login-step" id="step2">
@@ -1178,21 +1189,68 @@ class LoginController {
     this.captchaAnswer = 0;
     this.resendCountdown = 0;
     this.resendInterval = null;
+    this.authMode = 'otp';
+    this.boot();
+  }
 
-    // Check session (real login persistence)
+  async boot() {
     if (sessionStorage.getItem('vani_logged_in')) {
       this.email = sessionStorage.getItem('vani_email') || '';
       this.onSuccess(this.email);
       return;
     }
+    try {
+      const res = await fetch('/api/auth-config');
+      const cfg = await res.json();
+      this.authMode = cfg.mode || 'otp';
+      if (this.authMode === 'none') {
+        this.enterSession('guest@vani-setu.local');
+        return;
+      }
+      this.initDOM();
+      this.genCaptcha();
+      const hint = document.getElementById('loginHint');
+      if (cfg.email_configured) {
+        hint.textContent = 'We will email a 6-digit code. Check inbox and spam.';
+      } else {
+        hint.textContent = 'Email is not configured on this server. Use Continue as guest, or ask the host to set SMTP.';
+      }
+      if (cfg.guest_allowed) {
+        document.getElementById('guestWrap').style.display = 'block';
+      }
+    } catch (e) {
+      this.initDOM();
+      this.genCaptcha();
+    }
+  }
 
-    this.initDOM();
-    this.genCaptcha();
+  enterSession(email) {
+    this.email = email;
+    sessionStorage.setItem('vani_logged_in', 'true');
+    sessionStorage.setItem('vani_email', email);
+    this.onSuccess(email);
+  }
+
+  async enterAsGuest() {
+    try {
+      const res = await fetch('/api/guest-login', { method: 'POST' });
+      const data = await res.json();
+      if (!data.success) {
+        showToast(data.message || 'Guest login is disabled', 'error');
+        return;
+      }
+      showToast('Continuing as guest', 'success', 1800);
+      this.enterSession(data.email || 'guest@vani-setu.local');
+    } catch (e) {
+      showToast('Server not reachable', 'error');
+    }
   }
 
   initDOM() {
     document.getElementById('sendOtpBtn').onclick = () => this.sendOtp();
     document.getElementById('emailInput').addEventListener('keydown', e => { if (e.key === 'Enter') this.sendOtp(); });
+    const guestBtn = document.getElementById('guestBtn');
+    if (guestBtn) guestBtn.onclick = () => this.enterAsGuest();
 
     // OTP boxes
     const boxes = document.querySelectorAll('.otp-box');
