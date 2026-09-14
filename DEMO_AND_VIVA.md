@@ -8,7 +8,7 @@ cd Vani-Setu
 ```
 
 Open **http://127.0.0.1:5001**  
-OTP prints in the terminal if email is not configured in `Code/.env`.
+Create an account or sign in. Accounts are stored in `Code/users.db` (SQLite).
 
 Optional:
 
@@ -33,7 +33,7 @@ model without restarting the server.
 
 ## What works in the demo
 
-1. Login with OTP  
+1. Create account / Sign in (email + password)  
 2. Start camera  
 3. **Spell** mode → letters A–Z via SVM, 95.1% held-out accuracy (badge shows **ML MODEL**)  
 4. **Live confidence bar** showing the model's probability per frame  
@@ -99,7 +99,8 @@ tool for hearing users, and it exercises the classifier repeatedly on camera.
 | Path | Role |
 |------|------|
 | `Code/index.html` | UI, MediaPipe, Spell ML client, suggestions, practice mode |
-| `Code/server.py` | OTP, translate, collect, classify, train, health |
+| `Code/server.py` | Password login, translate, collect, classify, train, health |
+| `Code/models_user.py` | User table (SQLite / Postgres) |
 | `Code/train_classifier.py` | SVM trainer (writes model + reports) |
 | `Code/compare_models.py` | Benchmarks 5 classifiers for the report |
 | `Code/dataset/` | Letter CSV + phrase CSV + guides |
