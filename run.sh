@@ -13,5 +13,5 @@ pip install -q -r requirements_web.txt
 
 export PORT="${PORT:-5001}"
 echo "Vani-Setu → http://127.0.0.1:${PORT}"
-echo "Auth: ${AUTH_MODE:-otp}  (set AUTH_MODE=guest to skip terminal OTP)"
+echo "Auth: ${AUTH_MODE:-password}  (Create account / Sign in; AUTH_MODE=guest for a skip button)"
 python server.py
