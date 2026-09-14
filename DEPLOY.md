@@ -1,15 +1,30 @@
 # Deploying Vani-Setu (no terminal OTP)
 
-The terminal OTP exists only for **local** development when email is not set.
+The terminal OTP exists only for **local** development when `AUTH_MODE=otp` and email is not set.
 On a public URL you should not read codes from a server log.
 
 ## Alternatives (pick one)
 
-### 1. Guest button — recommended for a college showcase
+### 1. Email + password — default, uses a database
 
-No database. Visitors click **Continue as guest** and go to the camera.
+Create an account once, then sign in. Passwords are hashed (Werkzeug). No OTP.
 
-In `Code/.env` (or the host’s environment variables):
+**Local:** SQLite file `Code/users.db` is created automatically. Nothing extra to install.
+
+**Hosted:** set `DATABASE_URL` to the Postgres URL from Render / Railway / Neon. Also `pip install psycopg2-binary` (or add it on the host). `postgres://` URLs are rewritten to `postgresql://`.
+
+```
+AUTH_MODE=password
+HOST=0.0.0.0
+PORT=5001
+# DATABASE_URL=postgresql://user:pass@host:5432/dbname
+```
+
+Do not commit `users.db` or `.env`.
+
+### 2. Guest button — optional for a walk-up showcase
+
+Password login stays, plus **Continue as guest**.
 
 ```
 AUTH_MODE=guest
@@ -19,7 +34,7 @@ PORT=5001
 
 You can still add Gmail below so some users get a real email OTP.
 
-### 2. Skip login completely
+### 3. Skip login completely
 
 ```
 AUTH_MODE=none
@@ -28,9 +43,9 @@ HOST=0.0.0.0
 
 The login page never appears. Simplest public demo. Anyone with the link can use the camera.
 
-### 3. Email OTP (Gmail) — real codes, still no database
+### 4. Email OTP (Gmail) — codes instead of passwords
 
-This is already built. You do **not** need a database URL. The app still does not store user accounts; it only emails a 6-digit code that lives in RAM for 5 minutes.
+This does **not** store user accounts; it emails a 6-digit code that lives in RAM for 5 minutes.
 
 1. Turn on 2-Step Verification on the Google account.
 2. Create an **App password** (Google Account → Security → App passwords).
@@ -49,15 +64,6 @@ Gmail will reject your normal account password. It must be an App password.
 
 Other mail: any SMTP server works (`SMTP_HOST`, `SMTP_PORT`, user, pass). Services like SendGrid / Resend also speak SMTP.
 
-### 4. What we did **not** add (and why)
-
-| Idea | Why not for this project |
-|------|--------------------------|
-| Database URL / user table | Login is a gate, not an account system |
-| Show the OTP on the website | Anyone could log in as anyone |
-| SMS (Twilio) | Costs money and needs a phone number |
-| Google Sign-In | Needs a Google Cloud OAuth client; can be a later add-on |
-
 ## Camera needs HTTPS
 
 Browsers allow the webcam on `http://127.0.0.1` but **not** on a public `http://` URL. Deploy on a host that gives you **https://** (Render, Railway, Fly.io, Cloudflare Tunnel, etc.).
@@ -73,11 +79,11 @@ Locally Flask listens on `127.0.0.1`. On a VPS or PaaS you must set `HOST=0.0.0.
 - `Code/hand_landmarker.task` (gitignored — upload it)
 - Environment variables, never commit `.env`
 
-## Quick local test of guest mode
+## Quick local test of password login
 
 ```bash
 cd Sign-Language-Interpreter-using-Deep-Learning-master/Code
-AUTH_MODE=guest PORT=5001 .venv/bin/python server.py
+AUTH_MODE=password PORT=5001 .venv/bin/python server.py
 ```
 
-Open http://127.0.0.1:5001 and click **Continue as guest**.
+Open http://127.0.0.1:5001 — **Create account**, then **Sign in**.
