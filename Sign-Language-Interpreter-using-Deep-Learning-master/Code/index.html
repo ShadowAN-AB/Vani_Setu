@@ -276,6 +276,7 @@
     }
     .btn-primary:hover { background: var(--teal-deep); transform: translateY(-1px); }
     .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    #passwordActions .btn-primary { width: auto; margin-top: 0; flex: 1; }
     .btn-send-otp {
       padding: 13px 16px; border-radius: var(--radius-sm);
       border: 1px solid var(--teal);
@@ -830,7 +831,7 @@
       <section class="login-panel">
         <div class="login-kicker">Sign in</div>
         <h1>Continue to translate</h1>
-        <p class="lede">Verify your email, then open the camera workspace.</p>
+        <p class="lede" id="loginLede">Sign in with your email and password, then open the camera workspace.</p>
 
         <div class="step-indicator">
           <div class="step-dot active" id="dot1"></div>
@@ -841,14 +842,22 @@
         <div class="login-step active" id="step1">
           <div class="form-group">
             <label class="form-label">Email address</label>
-            <div class="email-row">
-              <input type="email" class="form-input" id="emailInput" placeholder="you@college.edu" autocomplete="email">
-              <button class="btn-send-otp" id="sendOtpBtn">Send OTP</button>
-            </div>
+            <input type="email" class="form-input" id="emailInput" placeholder="you@college.edu" autocomplete="email">
           </div>
-          <p class="msg-text" id="loginHint">If email is not configured, the code appears in the server terminal.</p>
+          <div class="form-group" id="passwordWrap" style="display:none;">
+            <label class="form-label">Password</label>
+            <input type="password" class="form-input" id="passwordInput" placeholder="At least 6 characters" autocomplete="current-password">
+          </div>
+          <div class="email-row" id="passwordActions" style="display:none;margin-top:10px;">
+            <button type="button" class="btn-primary" id="signInBtn" style="flex:1;">Sign in</button>
+            <button type="button" class="btn-send-otp" id="registerBtn">Create account</button>
+          </div>
+          <div class="email-row" id="otpActions" style="display:none;margin-top:10px;">
+            <button class="btn-send-otp" id="sendOtpBtn">Send OTP</button>
+          </div>
+          <p class="msg-text" id="loginHint">Create an account or sign in with email and password. Saved in a local SQLite database.</p>
           <div class="guest-wrap" id="guestWrap">
-            <button type="button" class="btn-guest" id="guestBtn">Continue as guest — skip OTP</button>
+            <button type="button" class="btn-guest" id="guestBtn">Continue as guest — skip login</button>
           </div>
         </div>
 
@@ -1189,7 +1198,7 @@ class LoginController {
     this.captchaAnswer = 0;
     this.resendCountdown = 0;
     this.resendInterval = null;
-    this.authMode = 'otp';
+    this.authMode = 'password';
     this.boot();
   }
 
@@ -1202,7 +1211,7 @@ class LoginController {
     try {
       const res = await fetch('/api/auth-config');
       const cfg = await res.json();
-      this.authMode = cfg.mode || 'otp';
+      this.authMode = cfg.mode || 'password';
       if (this.authMode === 'none') {
         this.enterSession('guest@vani-setu.local');
         return;
@@ -1210,10 +1219,21 @@ class LoginController {
       this.initDOM();
       this.genCaptcha();
       const hint = document.getElementById('loginHint');
-      if (cfg.email_configured) {
-        hint.textContent = 'We will email a 6-digit code. Check inbox and spam.';
-      } else {
-        hint.textContent = 'Email is not configured on this server. Use Continue as guest, or ask the host to set SMTP.';
+      const lede = document.getElementById('loginLede');
+      if (cfg.password_enabled) {
+        document.getElementById('passwordWrap').style.display = 'block';
+        document.getElementById('passwordActions').style.display = 'flex';
+        hint.textContent = 'Passwords are hashed and stored in SQLite (or Postgres if DATABASE_URL is set).';
+        lede.textContent = 'Sign in with your email and password, then open the camera workspace.';
+      }
+      if (cfg.otp_enabled) {
+        document.getElementById('otpActions').style.display = 'flex';
+        if (!cfg.password_enabled) {
+          lede.textContent = 'Verify your email, then open the camera workspace.';
+          hint.textContent = cfg.email_configured
+            ? 'We will email a 6-digit code. Check inbox and spam.'
+            : 'Email is not configured. Set SMTP or use AUTH_MODE=password.';
+        }
       }
       if (cfg.guest_allowed) {
         document.getElementById('guestWrap').style.display = 'block';
@@ -1221,6 +1241,8 @@ class LoginController {
     } catch (e) {
       this.initDOM();
       this.genCaptcha();
+      document.getElementById('passwordWrap').style.display = 'block';
+      document.getElementById('passwordActions').style.display = 'flex';
     }
   }
 
@@ -1248,7 +1270,17 @@ class LoginController {
 
   initDOM() {
     document.getElementById('sendOtpBtn').onclick = () => this.sendOtp();
-    document.getElementById('emailInput').addEventListener('keydown', e => { if (e.key === 'Enter') this.sendOtp(); });
+    document.getElementById('signInBtn').onclick = () => this.passwordAuth(false);
+    document.getElementById('registerBtn').onclick = () => this.passwordAuth(true);
+    document.getElementById('emailInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        if (document.getElementById('passwordWrap').style.display !== 'none') this.passwordAuth(false);
+        else this.sendOtp();
+      }
+    });
+    document.getElementById('passwordInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') this.passwordAuth(false);
+    });
     const guestBtn = document.getElementById('guestBtn');
     if (guestBtn) guestBtn.onclick = () => this.enterAsGuest();
 
@@ -1297,6 +1329,45 @@ class LoginController {
       if (i + 1 === n) d.classList.add('active');
       else if (i + 1 < n) d.classList.add('done');
     });
+  }
+
+  async passwordAuth(isRegister) {
+    const emailInput = document.getElementById('emailInput');
+    const passwordInput = document.getElementById('passwordInput');
+    this.email = emailInput.value.trim();
+    const password = passwordInput.value;
+    if (!this.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.email)) {
+      emailInput.classList.add('error');
+      showToast('Please enter a valid email address', 'error');
+      return;
+    }
+    emailInput.classList.remove('error');
+    if (password.length < 6) {
+      showToast('Password must be at least 6 characters', 'error');
+      return;
+    }
+    const btn = document.getElementById(isRegister ? 'registerBtn' : 'signInBtn');
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = isRegister ? 'Creating…' : 'Signing in…';
+    try {
+      const res = await fetch(isRegister ? '/api/register' : '/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: this.email, password })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(data.message, 'success');
+        this.enterSession(data.email || this.email);
+      } else {
+        showToast(data.message || 'Could not sign in', 'error');
+      }
+    } catch (e) {
+      showToast('Server not reachable. Start the Flask server first!', 'error');
+    }
+    btn.disabled = false;
+    btn.textContent = label;
   }
 
   async sendOtp() {
