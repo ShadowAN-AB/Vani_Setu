@@ -61,7 +61,7 @@ We wanted to make it easy for 70 million deaf people across the world to be inde
 ## Setup
 
 ### Modern Web Interface (Vani-Setu)
-College iteration with a light-themed web app, MediaPipe in the browser, OTP login, Spell-mode Random Forest (A–Z), Phrase/ISL rules, and dataset recording.
+College iteration with a light-themed web app, MediaPipe in the browser, email/password login (SQLite), Spell-mode SVM (A–Z), Phrase/ISL rules, and dataset recording.
 
 **Run (recommended):** from the `Vani-Setu` folder:
 
@@ -69,7 +69,7 @@ College iteration with a light-themed web app, MediaPipe in the browser, OTP log
 ./run.sh
 ```
 
-Then open **http://127.0.0.1:5001**. OTP prints in the terminal if `Code/.env` has no SMTP settings.
+Then open **http://127.0.0.1:5001**. Create an account or sign in (accounts are stored in `Code/users.db`). Set `AUTH_MODE=otp` if you still want email/terminal codes.
 
 See **[DEMO_AND_VIVA.md](../DEMO_AND_VIVA.md)** for the demo checklist and limitations.
 
