@@ -1,5 +1,5 @@
 """
-Vani-Setu backend: OTP auth, translation, landmark collection, and ML classify.
+Vani-Setu backend: password auth, translation, landmark collection, and ML classify.
 """
 
 import csv
