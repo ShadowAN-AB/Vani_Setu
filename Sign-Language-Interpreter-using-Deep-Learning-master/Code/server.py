@@ -20,6 +20,7 @@ from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 from features import landmarks_to_features
+from models_user import User, db, init_db
 from signs import OFFLINE_HI, catalog
 
 try:
@@ -69,12 +70,13 @@ SMTP_PASS = os.environ.get("SMTP_PASS", "").strip()
 SENDER_NAME = "Vani-Setu"
 PORT = int(os.environ.get("PORT", "5001"))
 HOST = os.environ.get("HOST", "127.0.0.1").strip() or "127.0.0.1"
-# otp  = email if SMTP is set, otherwise terminal (local only)
-# guest = OTP plus a "Continue as guest" button (good for a public demo)
-# none  = skip the login screen entirely
-AUTH_MODE = os.environ.get("AUTH_MODE", "otp").strip().lower()
-if AUTH_MODE not in ("otp", "guest", "none"):
-    AUTH_MODE = "otp"
+# password = email + password stored in SQLite (or DATABASE_URL Postgres)
+# otp      = email code if SMTP is set, otherwise the terminal (local only)
+# guest    = password/OTP plus a "Continue as guest" button
+# none     = skip the login screen entirely
+AUTH_MODE = os.environ.get("AUTH_MODE", "password").strip().lower()
+if AUTH_MODE not in ("password", "otp", "guest", "none"):
+    AUTH_MODE = "password"
 EMAIL_CONFIGURED = bool(SMTP_USER and SMTP_PASS)
 
 OTP_LENGTH = 6
@@ -177,6 +179,7 @@ def offline_translate(text, target):
 
 app = Flask(__name__, static_folder=APP_DIR)
 CORS(app)
+init_db(app)
 load_ml_model()
 
 
@@ -197,7 +200,42 @@ def auth_config():
         "mode": AUTH_MODE,
         "email_configured": EMAIL_CONFIGURED,
         "guest_allowed": AUTH_MODE in ("guest", "none"),
+        "password_enabled": AUTH_MODE in ("password", "guest"),
+        "otp_enabled": AUTH_MODE in ("otp", "guest"),
     })
+
+
+def _valid_email(email):
+    return bool(re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email or ""))
+
+
+@app.route("/api/register", methods=["POST"])
+def register():
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email") or "").strip().lower()
+    password = str(data.get("password") or "")
+    if not _valid_email(email):
+        return jsonify({"success": False, "message": "Enter a valid email address"}), 400
+    if len(password) < 6:
+        return jsonify({"success": False, "message": "Password must be at least 6 characters"}), 400
+    if User.query.filter_by(email=email).first():
+        return jsonify({"success": False, "message": "That email is already registered. Sign in instead."}), 409
+    user = User(email=email)
+    user.set_password(password)
+    db.session.add(user)
+    db.session.commit()
+    return jsonify({"success": True, "message": "Account created. You are signed in.", "email": user.email})
+
+
+@app.route("/api/login", methods=["POST"])
+def password_login():
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email") or "").strip().lower()
+    password = str(data.get("password") or "")
+    user = User.query.filter_by(email=email).first() if _valid_email(email) else None
+    if not user or not user.check_password(password):
+        return jsonify({"success": False, "message": "Invalid email or password"}), 401
+    return jsonify({"success": True, "message": "Signed in.", "email": user.email})
 
 
 @app.route("/api/guest-login", methods=["POST"])
@@ -478,6 +516,8 @@ if __name__ == "__main__":
     print("  +===============================================+")
     print("  |     Vani-Setu                                 |")
     print(f"  |     Auth: {AUTH_MODE:<36} |")
+    if AUTH_MODE == "password":
+        print("  |     Login: email + password (SQLite)          |")
     if EMAIL_CONFIGURED:
         print(f"  |     Email: {SMTP_USER[:34]:<34} |")
     elif AUTH_MODE == "otp":
