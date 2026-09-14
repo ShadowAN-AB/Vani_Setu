@@ -823,7 +823,7 @@
         <p class="brand-line">A bridge between gesture and voice — real-time sign translation for ASL and ISL.</p>
         <div class="brand-meta">
           <span>Camera-local</span>
-          <span>OTP secure</span>
+          <span>Password login</span>
           <span>25+ languages</span>
         </div>
       </section>
@@ -1225,6 +1225,9 @@ class LoginController {
         document.getElementById('passwordActions').style.display = 'flex';
         hint.textContent = 'Passwords are hashed and stored in SQLite (or Postgres if DATABASE_URL is set).';
         lede.textContent = 'Sign in with your email and password, then open the camera workspace.';
+        if (!cfg.otp_enabled) {
+          document.querySelector('.step-indicator').style.display = 'none';
+        }
       }
       if (cfg.otp_enabled) {
         document.getElementById('otpActions').style.display = 'flex';
