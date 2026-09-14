@@ -11,3 +11,5 @@ Sign-Language-Interpreter-using-Deep-Learning-master/Code/models/*.joblib
 Sign-Language-Interpreter-using-Deep-Learning-master/Code/reports/*.png
 Sign-Language-Interpreter-using-Deep-Learning-master/Code/reports/*.json
 Sign-Language-Interpreter-using-Deep-Learning-master/Code/reports/*.txt
+Sign-Language-Interpreter-using-Deep-Learning-master/Code/users.db
+Sign-Language-Interpreter-using-Deep-Learning-master/Code/*.db
