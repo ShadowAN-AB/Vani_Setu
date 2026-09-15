@@ -1,10 +1,54 @@
 # Vani-Setu
 
-**Vani-Setu** (*voice-bridge*) is a college sign-language translator. A laptop camera tracks one hand in the browser, the app turns poses into letters or short phrases, builds a sentence, can speak it, and can translate it into 25+ languages.
+<p align="center">
+  <strong>voice-bridge</strong> — real-time ASL / ISL translation from a laptop camera
+</p>
 
-The working product is a **Flask web app**. Day to day, run it on **localhost** at `http://127.0.0.1:5001`. You can also put the same repo on **Render** (HTTPS) so other people can open a public link. Local and hosted modes are described below.
+<p align="center">
+  <a href="https://vani-setu.onrender.com"><img src="https://img.shields.io/badge/Live_Demo-vani--setu.onrender.com-0b5f66?style=for-the-badge" alt="Live demo"></a>
+  <a href="https://github.com/ShadowAN-AB/Vani_Setu"><img src="https://img.shields.io/badge/GitHub-ShadowAN--AB%2FVani__Setu-181717?style=for-the-badge&logo=github" alt="GitHub"></a>
+</p>
 
-GitHub: [https://github.com/ShadowAN-AB/Vani_Setu](https://github.com/ShadowAN-AB/Vani_Setu)
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/Flask-API-000000?style=flat-square&logo=flask&logoColor=white" alt="Flask">
+  <img src="https://img.shields.io/badge/MediaPipe-Hand_Landmarker-009688?style=flat-square&logo=google&logoColor=white" alt="MediaPipe">
+  <img src="https://img.shields.io/badge/scikit--learn-SVM_RBF-F7931E?style=flat-square&logo=scikitlearn&logoColor=white" alt="scikit-learn">
+  <img src="https://img.shields.io/badge/SQLite-accounts-003B57?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite">
+  <img src="https://img.shields.io/badge/Render-HTTPS-46E3B7?style=flat-square&logo=render&logoColor=black" alt="Render">
+</p>
+
+**Live app:** [https://vani-setu.onrender.com](https://vani-setu.onrender.com)  
+Open the link → **Continue as guest** → **Start camera** (allow the webcam). The Free Render instance sleeps after idle time; the first load can take about a minute.
+
+A laptop camera tracks one hand in the browser. The app turns poses into letters or short phrases, builds a sentence, can speak it, and can translate it into 25+ languages.
+
+Day to day, run it on **localhost** at `http://127.0.0.1:5001` (`./run.sh`). The public URL is the same product over HTTPS.
+
+---
+
+## Tech stack
+
+| Layer | Tools |
+|:------|:------|
+| **Interface** | HTML5 · CSS3 · vanilla JavaScript · Google Fonts (Fraunces / Sora) |
+| **Vision** | [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker) (21-point Hand Landmarker in the browser) · `getUserMedia` camera |
+| **Backend** | Python 3 · Flask · Flask-CORS · Gunicorn |
+| **Machine learning** | scikit-learn **RBF SVM** (~95.1% held-out A–Z) · joblib · pandas · matplotlib (reports) |
+| **Accounts** | Flask-SQLAlchemy · Werkzeug password hashes · SQLite locally · optional Postgres (`DATABASE_URL`) |
+| **Speech & language** | Web Speech API (speak) · deep-translator / Google Translate · offline Hindi fallback |
+| **Data** | ASL Now fingerspelling landmarks (Hugging Face, MIT) · 63-D wrist-relative features |
+| **Run & ship** | `run.sh` on localhost · Render (HTTPS) · GitHub · python-dotenv |
+
+```text
+Browser (HTML / CSS / JS + MediaPipe)
+        │  camera landmarks
+        ▼
+Flask API  ──►  SVM (Spell)  |  pose rules (Phrase / ISL)
+        │
+        ├── SQLite / Postgres   (login)
+        └── Translate + Speak
+```
 
 ---
 
@@ -101,16 +145,18 @@ Keep this project folder for the viva. GitHub now has the letter model; you do n
 
 ---
 
-## Public URL (optional)
+## Public URL
 
-Localhost does not change. To share an `https://` link (camera will not work on public `http://`):
+**Live:** [https://vani-setu.onrender.com](https://vani-setu.onrender.com)
 
-1. Push `main` to GitHub.
-2. On [render.com](https://render.com) → **New** → **Blueprint** (uses `render.yaml`) or a **Web Service** with:
+Localhost does not change. To redeploy after a code push:
+
+1. Push `main` to GitHub (Render auto-builds).
+2. Or [render.com](https://render.com) → **New** → **Web Service**:
    - Build: `pip install -r requirements.txt`
    - Start: `bash start.sh`
    - `AUTH_MODE=guest`
-3. Open the `https://….onrender.com` URL → **Continue as guest** → **Start camera**.
+3. Open the `https://` URL → **Continue as guest** → **Start camera**.
 
 Full notes: [DEPLOY.md](DEPLOY.md). Free Render apps sleep after idle time; the first hit after sleep can take about a minute.
 
@@ -193,7 +239,7 @@ Vani-Setu/
         ├── requirements_web.txt
         ├── .env.example
         ├── dataset/                   ← landmarks + recording guides
-        └── models/sign_rf.joblib      ← local model (not in git)
+        └── models/sign_rf.joblib      ← trained letter SVM (in git)
 ```
 
 ---

@@ -1,5 +1,8 @@
 # Deploying Vani-Setu
 
+**Live demo:** [https://vani-setu.onrender.com](https://vani-setu.onrender.com)  
+Continue as guest → Start camera. The Free instance may take a minute to wake.
+
 **Localhost still works the same way.** From this folder:
 
 ```bash
