@@ -2,7 +2,7 @@
 
 **Vani-Setu** (*voice-bridge*) is a college sign-language translator. A laptop camera tracks one hand in the browser, the app turns poses into letters or short phrases, builds a sentence, can speak it, and can translate it into 25+ languages.
 
-The working product is a **Flask web app** at `http://127.0.0.1:5001`. It is meant to run on **localhost** for a classroom demo.
+The working product is a **Flask web app**. Day to day, run it on **localhost** at `http://127.0.0.1:5001`. You can also put the same repo on **Render** (HTTPS) so other people can open a public link. Local and hosted modes are described below.
 
 GitHub: [https://github.com/ShadowAN-AB/Vani_Setu](https://github.com/ShadowAN-AB/Vani_Setu)
 
@@ -88,28 +88,31 @@ Double-click `Sign-Language-Interpreter-using-Deep-Learning-master/RUN_VANI_SETU
 
 ---
 
-## First-time files (keep these)
+## First-time files
 
-Two files are **gitignored** and live only on the machine that already ran the demo:
+| File | In git? | What happens |
+|------|---------|----------------|
+| `Code/models/sign_rf.joblib` | Yes | Spell-mode SVM. Present after `git clone`. |
+| `Code/hand_landmarker.task` | No (~7.5 MB) | MediaPipe hand model. The server **downloads it on first run** if missing. |
 
-| File | Why it matters |
-|------|----------------|
-| `Code/hand_landmarker.task` | MediaPipe hand model. Camera tracking fails without it. |
-| `Code/models/sign_rf.joblib` | Trained letter SVM. Spell mode falls back to rules without it. |
+`users.db` stays local and gitignored. A hosted demo uses guest login so it does not depend on that file.
 
-If you clone a **fresh** copy from GitHub, you must restore those two files from a backup, or:
+Keep this project folder for the viva. GitHub now has the letter model; you do not need a USB copy of `sign_rf.joblib`.
 
-1. Download `hand_landmarker.task` from [MediaPipe Hand Landmarker](https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task) into `Code/`.
-2. Retrain the letter model (needs `dataset/landmarks.csv`):
+---
 
-```bash
-cd Sign-Language-Interpreter-using-Deep-Learning-master/Code
-.venv/bin/python train_classifier.py
-```
+## Public URL (optional)
 
-Or click **Retrain model** in the app after the server is up.
+Localhost does not change. To share an `https://` link (camera will not work on public `http://`):
 
-**Do not delete this project folder** if you plan to demo later. A clone from GitHub is the source code only.
+1. Push `main` to GitHub.
+2. On [render.com](https://render.com) → **New** → **Blueprint** (uses `render.yaml`) or a **Web Service** with:
+   - Build: `pip install -r requirements.txt`
+   - Start: `bash start.sh`
+   - `AUTH_MODE=guest`
+3. Open the `https://….onrender.com` URL → **Continue as guest** → **Start camera**.
+
+Full notes: [DEPLOY.md](DEPLOY.md). Free Render apps sleep after idle time; the first hit after sleep can take about a minute.
 
 ---
 
@@ -147,7 +150,7 @@ Default is **password**. Copy `Code/.env.example` to `Code/.env` only if you nee
 | `otp` | Email / terminal 6-digit code (needs SMTP for real email). |
 | `none` | Skip the login screen. |
 
-Hosted deploy notes (HTTPS, `HOST=0.0.0.0`, Postgres): see [DEPLOY.md](DEPLOY.md).
+Hosted deploy notes (Render, HTTPS, guest login): see [DEPLOY.md](DEPLOY.md).
 
 ---
 
@@ -172,8 +175,9 @@ Reports land in `Code/reports/` (confusion matrix, accuracy, model comparison).
 ```
 Vani-Setu/
 ├── README.md                          ← this file
-├── run.sh                             ← Mac / Linux launcher (port 5001)
-├── DEPLOY.md                          ← public host / AUTH_MODE notes
+├── run.sh                             ← Mac / Linux localhost launcher (port 5001)
+├── start.sh / Procfile / render.yaml  ← public host (Render / Railway)
+├── DEPLOY.md                          ← localhost vs Render
 ├── DEMO_AND_VIVA.md                   ← demo checklist and viva talking points
 └── Sign-Language-Interpreter-using-Deep-Learning-master/
     ├── README.md                      ← original HackUNT-19 project
