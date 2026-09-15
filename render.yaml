@@ -1,0 +1,17 @@
+# Blueprint: Render Dashboard → New → Blueprint → this GitHub repo.
+# Localhost is unchanged: ./run.sh still binds 127.0.0.1:5001 with password login.
+services:
+  - type: web
+    name: vani-setu
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: bash start.sh
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      - key: AUTH_MODE
+        value: guest
+      - key: HOST
+        value: "0.0.0.0"
+      - key: MPLBACKEND
+        value: Agg

@@ -12,6 +12,7 @@ import subprocess
 import sys
 import time
 import smtplib
+import urllib.request
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from threading import Lock
@@ -45,9 +46,21 @@ except ImportError:
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(APP_DIR, "dataset")
 MODEL_PATH = os.path.join(APP_DIR, "models", "sign_rf.joblib")
+HAND_TASK_PATH = os.path.join(APP_DIR, "hand_landmarker.task")
+HAND_TASK_URL = (
+    "https://storage.googleapis.com/mediapipe-models/hand_landmarker/"
+    "hand_landmarker/float16/latest/hand_landmarker.task"
+)
 CSV_PATH = os.path.join(DATA_DIR, "landmarks.csv")
 PHRASE_CSV_PATH = os.path.join(DATA_DIR, "landmarks_phrases.csv")
 TARGET_SAMPLES_PER_LABEL = 25
+
+
+def _on_paas():
+    return any(
+        os.environ.get(k)
+        for k in ("RENDER", "RAILWAY_ENVIRONMENT", "FLY_APP_NAME", "K_SERVICE")
+    )
 
 
 def _count_csv_rows(path):
@@ -69,7 +82,9 @@ SMTP_USER = os.environ.get("SMTP_USER", "").strip()
 SMTP_PASS = os.environ.get("SMTP_PASS", "").strip()
 SENDER_NAME = "Vani-Setu"
 PORT = int(os.environ.get("PORT", "5001"))
-HOST = os.environ.get("HOST", "127.0.0.1").strip() or "127.0.0.1"
+HOST = os.environ.get("HOST", "0.0.0.0" if _on_paas() else "127.0.0.1").strip() or (
+    "0.0.0.0" if _on_paas() else "127.0.0.1"
+)
 # password = email + password stored in SQLite (or DATABASE_URL Postgres)
 # otp      = email code if SMTP is set, otherwise the terminal (local only)
 # guest    = password/OTP plus a "Continue as guest" button
@@ -102,6 +117,23 @@ csv_lock = Lock()
 train_lock = Lock()
 MAX_CACHE_SIZE = 500
 ml_model = None
+
+
+def ensure_hand_landmarker():
+    """Fetch MediaPipe's hand model if it is missing (fresh clone or a host)."""
+    if os.path.exists(HAND_TASK_PATH) and os.path.getsize(HAND_TASK_PATH) > 1000:
+        return
+    print("  [OK] Downloading hand_landmarker.task (first run)...")
+    tmp_path = HAND_TASK_PATH + ".tmp"
+    try:
+        urllib.request.urlretrieve(HAND_TASK_URL, tmp_path)
+        os.replace(tmp_path, HAND_TASK_PATH)
+        print(f"  [OK] Saved {HAND_TASK_PATH}")
+    except Exception as e:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+        print(f"  [WARN] Could not download hand_landmarker.task: {e}")
+        print(f"  [WARN] Get it from: {HAND_TASK_URL}")
 
 
 def load_ml_model():
@@ -179,6 +211,7 @@ def offline_translate(text, target):
 
 app = Flask(__name__, static_folder=APP_DIR)
 CORS(app)
+ensure_hand_landmarker()
 init_db(app)
 load_ml_model()
 

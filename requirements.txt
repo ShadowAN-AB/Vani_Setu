@@ -1,0 +1,2 @@
+# PaaS install from the repo root (localhost still uses Code/requirements_web.txt via run.sh).
+-r Sign-Language-Interpreter-using-Deep-Learning-master/Code/requirements_web.txt
