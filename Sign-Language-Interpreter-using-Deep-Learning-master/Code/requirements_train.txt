@@ -1,0 +1,4 @@
+# Extra packages for training on a laptop. The web server (requirements_web.txt) does not need these.
+#   pip install -r requirements_web.txt -r requirements_train.txt
+tensorflow>=2.16        # Keras MLP training (nn/train_mlp.py); the server runs the exported weights with NumPy
+wordfreq>=3.1           # only to rebuild dataset/word_frequencies.csv (build_wordlist.py)

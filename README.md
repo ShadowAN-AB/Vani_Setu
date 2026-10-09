@@ -57,8 +57,8 @@ Flask API  ──►  SVM (Spell)  |  pose rules (Phrase / ISL)
 | Mode | What happens |
 |------|----------------|
 | **Spell** | Fingerspelling A–Z. An RBF **SVM** classifies 88 landmark features (**96.9%** test accuracy, 97.1% ± 1.6% 5-fold CV, and about 97% when the hand is mirrored, tilted or farther away). |
-| **Phrase** | Whole signs such as Hello, Yes, OK. Rule-based finger geometry. |
-| **ISL** | Simplified single-hand classroom signs (Namaste, Thank You, Water, Help, …). Teaching set, not a certified ISL lexicon. |
+| **Phrase** | Whole signs such as Hello, Yes, OK. A Keras **MLP neural network** on both hands (181 features) once phrase samples are recorded and trained; hand-written finger rules until then. |
+| **ISL** | Indian signs (Namaste, Thank You, Water, Help, …), one or two hands. Same neural network approach with its own model; rules as the fallback. Not a certified ISL lexicon. |
 | **Practice** | The app prompts a letter and scores your attempts. |
 | **Translate / Speak** | English sentence → 25+ languages, plus browser speech. Hindi has an offline fallback if Google Translate is down. |
 
@@ -66,7 +66,7 @@ Also included:
 
 - Email + password login (hashed passwords in a local **SQLite** file)
 - Live confidence bar in Spell mode
-- Word-suggestion chips while spelling
+- Word prediction while spelling: a noisy-channel model (word frequencies × the letter model's confusion matrix) can fix a misread letter, e.g. X-E-D → RED
 - Record dataset + **Retrain model** from the browser
 - Sign Guide overlay
 
@@ -211,6 +211,8 @@ cd Sign-Language-Interpreter-using-Deep-Learning-master/Code
 .venv/bin/python train_classifier.py    # train + reports (70/15/15 split, augmentation, grid search)
 .venv/bin/python compare_models.py      # six classifiers on the same data
 .venv/bin/python evaluate.py            # before/after, CV, learning + validation curves, PCA/t-SNE, speed
+.venv/bin/pip install -r requirements_train.txt   # TensorFlow, only for the neural networks
+.venv/bin/python nn/train_mlp.py --kind letter    # MLP vs SVM on letters (also: --kind phrase / isl)
 ```
 
 Reports land in `Code/reports/`: `metrics.json`, `evaluation.md`, `model_comparison.md` and the figures.
@@ -241,6 +243,9 @@ Vani-Setu/
         ├── train_classifier.py        ← SVM trainer
         ├── compare_models.py          ← classifier benchmark
         ├── evaluate.py                ← evaluation report
+        ├── suggest.py                 ← noisy-channel word prediction
+        ├── nn/train_mlp.py            ← Keras MLP (letters / phrases / ISL)
+        ├── nn/numpy_mlp.py            ← runs the exported MLP with NumPy on the server
         ├── requirements_web.txt
         ├── .env.example
         ├── dataset/                   ← asl_now_landmarks.csv, recordings/, guides
@@ -285,4 +290,5 @@ See `Code/dataset/DATASET_SOURCE.md` and `RECORDING_GUIDE.md`.
 - **Starting point:** this repository began from [Sign Language Interpreter using Deep Learning](https://github.com/harshbg/Sign-Language-Interpreter-using-Deep-Learning) by Harsh Gupta (HackUNT-19, 2019, MIT licence), which classified hand images with a Keras CNN. Vani-Setu replaced that pipeline; the original files are kept, unused, in `Sign-Language-Interpreter-using-Deep-Learning-master/legacy/`.
 - **Hand tracking:** [MediaPipe Hand Landmarker](https://developers.google.com/edge/mediapipe/solutions/vision/hand_landmarker) (Google).
 - **Letter dataset:** [ASL Now Fingerspelling Landmarks](https://huggingface.co/datasets/AxelS27/asl-now-fingerspelling) by AxelS27 (MIT licence).
+- **Word frequencies:** derived from [wordfreq](https://github.com/rspeer/wordfreq) by Robyn Speer (word list data CC BY-SA 4.0), in `Code/dataset/word_frequencies.csv`.
 - **Team:** Abdullah Naseem, Bhanu Satwik, Manoj Kumar K (CSET, Bennett University), guided by Dr. Mohd Anas.

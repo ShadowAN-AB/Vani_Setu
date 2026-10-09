@@ -234,6 +234,14 @@ def main():
     cm_path = os.path.join(REPORT_DIR, "confusion_matrix.png")
     confusions = save_confusion(dev_y[te], test_pred, list(classes), test_metrics["accuracy"], cm_path)
 
+    # Confusion counts on all held-out data (validation + test): the "channel" that
+    # suggest.py uses to guess the intended word when a letter is misread.
+    held_p = np.concatenate([dev_p[va], dev_p[te]])
+    held_y = np.concatenate([dev_y[va], dev_y[te]])
+    held_pred = evaluate(model, classes, held_p, held_y, version)[0]
+    channel = {"classes": list(classes),
+               "counts": confusion_matrix(held_y, held_pred, labels=list(classes)).tolist()}
+
     new_signer = None
     if len(new_y):
         new_pred, _, new_signer = evaluate(model, classes, new_p, new_y, version)
@@ -274,6 +282,7 @@ def main():
         "classes": list(classes),
         "feature_version": version,
         "threshold": threshold["threshold"],
+        "confusion": channel,
         "metrics": {k: metrics[k] for k in ("accuracy", "test", "validation", "best_params", "trained_at")},
         "sklearn_version": sklearn.__version__,
     }, MODEL_PATH)

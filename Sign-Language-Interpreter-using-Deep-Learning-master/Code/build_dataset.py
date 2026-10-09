@@ -18,7 +18,10 @@ import json
 import os
 import sys
 
-from data import ASL_NOW_CSV, ASL_NOW_DIR, COLUMNS, COORD_COLUMNS, landmarks_to_array
+from data import ASL_NOW_CSV, ASL_NOW_DIR, COORD_COLUMNS, META_COLUMNS, landmarks_to_array
+
+# One hand per sample, so the second-hand columns are left out of this file.
+COLUMNS = META_COLUMNS + COORD_COLUMNS
 
 
 def main():

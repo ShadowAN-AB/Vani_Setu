@@ -1,0 +1,63 @@
+{
+  "kind": "letter",
+  "classes": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "I",
+    "J",
+    "K",
+    "L",
+    "M",
+    "N",
+    "O",
+    "P",
+    "Q",
+    "R",
+    "S",
+    "T",
+    "U",
+    "V",
+    "W",
+    "X",
+    "Y",
+    "Z"
+  ],
+  "features": "v2",
+  "n_features": 88,
+  "architecture": "Dense 128 ReLU -> Dropout 0.3 -> Dense 64 ReLU -> Dropout 0.3 -> Dense softmax",
+  "parameters": 21338,
+  "split": {
+    "train": 1484,
+    "train_after_augmentation": 8904,
+    "validation": 319,
+    "test": 319,
+    "new_signer_test": 0
+  },
+  "epochs_run": 26,
+  "best_epoch": 16,
+  "fit_seconds": 13.1,
+  "validation": {
+    "accuracy": 0.9718,
+    "keras_accuracy": 0.9718
+  },
+  "test": {
+    "accuracy": 0.9592,
+    "macro_f1": 0.9605
+  },
+  "confidence_threshold": {
+    "threshold": 0.75,
+    "kept_correct": 0.9806,
+    "rejected_errors": 0.4444
+  },
+  "svm_same_test": {
+    "accuracy": 0.9687,
+    "macro_f1": 0.9724
+  },
+  "numpy_ms_per_prediction": 0.0381
+}

@@ -20,7 +20,9 @@ from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 import data as dataset
-from features import landmarks_to_features
+from features import hands_to_two_hand_features, landmarks_to_features
+from nn.numpy_mlp import NumpyMLP
+from suggest import Suggester
 from models_user import User, db, init_db
 from signs import OFFLINE_HI, catalog
 
@@ -48,6 +50,11 @@ DATA_DIR = os.path.join(APP_DIR, "dataset")
 MODEL_PATH = os.path.join(APP_DIR, "models", "sign_svm.joblib")
 LEGACY_MODEL_PATH = os.path.join(APP_DIR, "models", "sign_rf.joblib")  # pre-v2 file name
 DEFAULT_THRESHOLD = 0.50
+# Neural-network models for whole signs, trained with nn/train_mlp.py (one file per kind)
+SIGN_MODEL_PATHS = {
+    "phrase": os.path.join(APP_DIR, "models", "phrase_mlp.npz"),
+    "isl": os.path.join(APP_DIR, "models", "isl_mlp.npz"),
+}
 HAND_TASK_PATH = os.path.join(APP_DIR, "hand_landmarker.task")
 HAND_TASK_URL = (
     "https://storage.googleapis.com/mediapipe-models/hand_landmarker/"
@@ -114,6 +121,8 @@ train_lock = Lock()
 MAX_CACHE_SIZE = 500
 ml_model = None       # the classifier (has predict_proba and classes_)
 ml_info = {}          # feature version, threshold and headline metrics saved by the trainer
+sign_models = {}      # kind -> NumpyMLP for phrase / ISL signs
+suggester = Suggester()  # word prediction; uses the letter model's confusion counts
 
 
 def ensure_hand_landmarker():
@@ -155,9 +164,24 @@ def load_ml_model():
             ml_info = {"path": os.path.relpath(path, APP_DIR), "feature_version": 1,
                        "threshold": DEFAULT_THRESHOLD, "metrics": {}}
         print(f"  [OK] Loaded classifier: {ml_info['path']} (features v{ml_info['feature_version']})")
+        suggester.set_confusion(obj.get("confusion") if isinstance(obj, dict) else None)
     except Exception as e:
         ml_model, ml_info = None, {}
         print(f"  [WARN] Could not load model: {e}")
+
+
+def load_sign_models():
+    """Load whichever phrase / ISL networks have been trained; Phrase and ISL modes use rules otherwise."""
+    global sign_models
+    loaded = {}
+    for kind, path in SIGN_MODEL_PATHS.items():
+        if os.path.exists(path):
+            try:
+                loaded[kind] = NumpyMLP(path)
+                print(f"  [OK] Loaded {kind} network: {len(loaded[kind].classes_)} signs")
+            except Exception as e:
+                print(f"  [WARN] Could not load {path}: {e}")
+    sign_models = loaded
 
 
 def generate_otp():
@@ -225,6 +249,7 @@ CORS(app)
 ensure_hand_landmarker()
 init_db(app)
 load_ml_model()
+load_sign_models()
 
 
 @app.route("/")
@@ -449,6 +474,13 @@ def model_status():
         "phrase_samples": dataset.counts("phrase"),
         "target_per_label": TARGET_SAMPLES_PER_LABEL,
         "training_enabled": TRAINING_ENABLED,
+        "sign_models": {
+            kind: {"loaded": kind in sign_models,
+                   "signs": [str(c) for c in sign_models[kind].classes_] if kind in sign_models else [],
+                   "threshold": sign_models[kind].threshold if kind in sign_models else None,
+                   "samples": dataset.counts(kind)}
+            for kind in SIGN_MODEL_PATHS
+        },
     })
 
 
@@ -458,14 +490,14 @@ def collect_sample():
     if not TRAINING_ENABLED:
         return _training_disabled()
     data = request.get_json(silent=True)
-    if not data or "label" not in data or "landmarks" not in data:
+    if not data or "label" not in data or ("landmarks" not in data and "hands" not in data):
         return jsonify({"success": False, "message": "label and landmarks are required"}), 400
 
     label = str(data["label"]).strip()
     if not label or label == "?":
         return jsonify({"success": False, "message": "Pick a sign label first"}), 400
 
-    # Letters and phrases share one file but are kept apart by "kind",
+    # Letters, ASL phrases and ISL signs share one file but are kept apart by "kind",
     # so phrase samples never leak into the letter model.
     kind = str(data.get("kind") or "letter").strip().lower()
     if kind not in dataset.KINDS:
@@ -473,10 +505,9 @@ def collect_sample():
 
     try:
         with csv_lock:
-            dataset.append_recording(
-                label, data["landmarks"], kind=kind,
-                signer=data.get("signer", ""), hand=data.get("hand", ""), split=data.get("split", ""),
-            )
+            hands = dataset.parse_hands(data)
+            dataset.append_recording(label, hands, kind=kind,
+                                     signer=data.get("signer", ""), split=data.get("split", ""))
             count = dataset.counts(kind)
             label_count = dataset.counts(kind, label)
     except ValueError as e:
@@ -488,6 +519,7 @@ def collect_sample():
         "label_count": label_count,
         "label": label,
         "kind": kind,
+        "hands": len(hands),
         "split": "test" if str(data.get("split", "")).lower() == "test" else "train",
         "target": TARGET_SAMPLES_PER_LABEL,
         "path": os.path.relpath(dataset.RECORDINGS_CSV, APP_DIR),
@@ -496,42 +528,48 @@ def collect_sample():
 
 @app.route("/api/train", methods=["POST"])
 def train_model():
-    """Run train_classifier.py and hot-reload the model, so a demo never needs a terminal."""
+    """Retrain from the browser and hot-reload, so a demo never needs a terminal.
+    kind=letter runs train_classifier.py (SVM); kind=phrase / isl runs nn/train_mlp.py (MLP)."""
     if not TRAINING_ENABLED:
         return _training_disabled()
+    body = request.get_json(silent=True) or {}
+    kind = str(body.get("kind") or "letter").lower()
+    if kind not in dataset.KINDS:
+        kind = "letter"
     if not train_lock.acquire(blocking=False):
         return jsonify({"success": False, "message": "Training already in progress"}), 409
 
     try:
-        script = os.path.join(APP_DIR, "train_classifier.py")
-        proc = subprocess.run(
-            [sys.executable, script],
-            cwd=APP_DIR,
-            capture_output=True,
-            text=True,
-            timeout=600,
-        )
+        if kind == "letter":
+            cmd = [sys.executable, os.path.join(APP_DIR, "train_classifier.py")]
+            report = os.path.join(APP_DIR, "reports", "metrics.json")
+        else:
+            cmd = [sys.executable, os.path.join(APP_DIR, "nn", "train_mlp.py"), "--kind", kind]
+            report = os.path.join(APP_DIR, "reports", f"nn_{kind}.json")
+        proc = subprocess.run(cmd, cwd=APP_DIR, capture_output=True, text=True, timeout=900)
         if proc.returncode != 0:
-            tail = (proc.stdout or proc.stderr or "").strip().splitlines()
-            return jsonify({
-                "success": False,
-                "message": tail[-1] if tail else "Training failed",
-            }), 500
+            lines = [l for l in (proc.stdout + "\n" + proc.stderr).strip().splitlines() if l.strip()]
+            message = lines[-1] if lines else "Training failed"
+            if proc.returncode == 2 and "TensorFlow" in proc.stdout:
+                message = "Training the neural network needs TensorFlow: pip install -r requirements_train.txt"
+            elif "No " in proc.stdout and "samples yet" in proc.stdout:
+                message = f"No {kind} samples yet. Record some first."
+            return jsonify({"success": False, "message": message}), 500
 
         load_ml_model()
-
+        load_sign_models()
         metrics = {}
-        metrics_path = os.path.join(APP_DIR, "reports", "metrics.json")
-        if os.path.exists(metrics_path):
-            with open(metrics_path, encoding="utf-8") as f:
+        if os.path.exists(report):
+            with open(report, encoding="utf-8") as f:
                 metrics = json.load(f)
-
+        test = metrics.get("test") or {}
         return jsonify({
             "success": True,
-            "accuracy": metrics.get("accuracy"),
-            "n_samples": metrics.get("n_samples"),
-            "n_classes": metrics.get("n_classes"),
-            "model_loaded": ml_model is not None,
+            "kind": kind,
+            "accuracy": metrics.get("accuracy", test.get("accuracy")),
+            "n_samples": metrics.get("n_samples", sum((metrics.get("split") or {}).get(k, 0) for k in ("train", "validation", "test"))),
+            "n_classes": metrics.get("n_classes", len(metrics.get("classes", []))),
+            "model_loaded": ml_model is not None if kind == "letter" else kind in sign_models,
         })
     except subprocess.TimeoutExpired:
         return jsonify({"success": False, "message": "Training timed out"}), 504
@@ -541,34 +579,55 @@ def train_model():
         train_lock.release()
 
 
+@app.route("/api/suggest", methods=["POST"])
+def suggest_words():
+    """Noisy-channel word prediction for the letters spelled so far (see suggest.py)."""
+    data = request.get_json(silent=True) or {}
+    letters = str(data.get("letters") or "")[:20]
+    return jsonify({"success": True, "letters": letters.upper(), "suggestions": suggester.suggest(letters, k=4)})
+
+
 @app.route("/api/classify", methods=["POST"])
 def classify_landmarks():
-    if ml_model is None:
-        return jsonify({"success": False, "message": "No trained model yet. Record samples and run train_classifier.py"}), 404
-
+    """mode=letter: SVM on the first hand. mode=phrase / isl: the MLP for that kind on both hands."""
     data = request.get_json(silent=True)
-    if not data or "landmarks" not in data:
+    if not data or ("landmarks" not in data and "hands" not in data):
         return jsonify({"success": False, "message": "landmarks required"}), 400
+    mode = str(data.get("mode") or "letter").lower()
 
     start = time.perf_counter()
     try:
-        feats = landmarks_to_features(data["landmarks"], ml_info.get("feature_version", 1))
+        hands = dataset.parse_hands(data)
     except ValueError as e:
         return jsonify({"success": False, "message": str(e)}), 400
 
+    if mode in SIGN_MODEL_PATHS:
+        model = sign_models.get(mode)
+        if model is None:
+            return jsonify({"success": False, "message": f"No {mode} network trained yet"}), 404
+        feats = hands_to_two_hand_features(hands)
+        threshold = model.threshold
+    else:
+        model = ml_model
+        if model is None:
+            return jsonify({"success": False, "message": "No trained model yet. Run train_classifier.py"}), 404
+        feats = landmarks_to_features(hands[0][0], ml_info.get("feature_version", 1))
+        threshold = ml_info.get("threshold", DEFAULT_THRESHOLD)
+
     try:
-        # The letter always comes from the highest probability, so the label and
+        # The label always comes from the highest probability, so the label and
         # the confidence shown in the app can never disagree.
-        probs = ml_model.predict_proba([feats])[0]
-        classes = [str(c) for c in ml_model.classes_]
+        probs = model.predict_proba([feats])[0]
+        classes = [str(c) for c in model.classes_]
         order = sorted(range(len(classes)), key=lambda i: -probs[i])
         top = [{"label": classes[i], "confidence": round(float(probs[i]), 4)} for i in order[:3]]
         return jsonify({
             "success": True,
+            "mode": mode if mode in SIGN_MODEL_PATHS else "letter",
             "label": top[0]["label"],
             "confidence": top[0]["confidence"],
             "top": top,
-            "threshold": ml_info.get("threshold", DEFAULT_THRESHOLD),
+            "threshold": threshold,
             "server_ms": round((time.perf_counter() - start) * 1000, 2),
         })
     except Exception as e:

@@ -15,6 +15,12 @@ Version 2 (current, 88 numbers)
     which is what separates look-alike letters such as D (straight index
     finger) and X (hooked index finger).
 
+Two hands (phrase and ISL models, 181 numbers)
+    88  version-2 features of the left hand  (zeros if it is not visible)
+    88  version-2 features of the right hand (zeros if it is not visible)
+     2  which hands are visible (1 / 0)
+     3  position of the second wrist relative to the first, divided by palm length
+
 The trainer stores the version it used inside the model file, and the server
 computes features with that same version, so an old model keeps working.
 """
@@ -91,3 +97,55 @@ def batch_features(points, version=FEATURE_VERSION):
 def landmarks_to_features(landmarks, version=FEATURE_VERSION):
     """One MediaPipe landmark list -> one feature vector (list of floats)."""
     return batch_features(landmarks_to_array(landmarks), version)[0].tolist()
+
+
+HAND_SLOTS = ("Left", "Right")
+TWO_HAND_SIZE = 2 * FEATURE_SIZES[2] + 2 + 3
+
+
+def _slots(handedness_pair, present):
+    """Map up to two detected hands to the Left / Right slots using MediaPipe's labels."""
+    slots, used = [None, None], set()
+    for i, label in enumerate(handedness_pair):
+        if not present[i]:
+            continue
+        s = HAND_SLOTS.index(label) if label in HAND_SLOTS else None
+        if s is None or s in used:
+            s = 0 if 0 not in used else 1
+        slots[i] = s
+        used.add(s)
+    return slots
+
+
+def two_hand_features(points, hands):
+    """
+    points: (N, 2, 21, 3) with zeros for a missing second hand
+    hands:  list of N (handedness_1, handedness_2) pairs
+    -> (N, 181)
+    """
+    points = np.asarray(points, dtype=np.float64)
+    n = len(points)
+    out = np.zeros((n, TWO_HAND_SIZE))
+    size = FEATURE_SIZES[2]
+    present = np.abs(points).sum(axis=(2, 3)) > 0
+    per_hand = [features_v2(points[:, k]) for k in range(2)]
+    for i in range(n):
+        slots = _slots(hands[i], present[i])
+        for k in range(2):
+            if slots[k] is not None:
+                out[i, slots[k] * size:(slots[k] + 1) * size] = per_hand[k][i]
+                out[i, 2 * size + slots[k]] = 1.0
+        if present[i].all():
+            palm = np.linalg.norm(points[i, 0, MIDDLE_KNUCKLE, :2] - points[i, 0, WRIST, :2]) or 1.0
+            out[i, 2 * size + 2:] = (points[i, 1, WRIST] - points[i, 0, WRIST]) / palm
+    return out
+
+
+def hands_to_two_hand_features(hands):
+    """Server helper: list of (points (21, 3), handedness) -> one 181-number vector."""
+    pts = np.zeros((1, 2, 21, 3))
+    labels = ["", ""]
+    for k, (p, label) in enumerate(hands[:2]):
+        pts[0, k] = p
+        labels[k] = label
+    return two_hand_features(pts, [tuple(labels)])[0]

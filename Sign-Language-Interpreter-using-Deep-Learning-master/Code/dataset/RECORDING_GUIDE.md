@@ -1,15 +1,17 @@
 # How to record samples
 
 Recording runs only on **localhost** (the public site turns it off). Every sample is saved as the
-raw 21 hand points plus the signer's name, the hand MediaPipe saw, and whether it is a test sample,
-in `dataset/recordings/samples.csv`. Letters and phrases share that file but are kept apart by the
-`kind` column, so phrase samples never reach the letter model.
+raw hand points (one or two hands) plus the signer's name, which hand MediaPipe saw, and whether it is
+a test sample, in `dataset/recordings/samples.csv`. Letters, ASL phrases and ISL signs share that file
+but are kept apart by the `kind` column (`letter`, `phrase`, `isl`), so they never mix.
 
 ## Steps
 
 1. Start the app (`./run.sh`) and open http://127.0.0.1:5001.
 2. Log in and click **Start camera**.
-3. Choose **SPELL** to record letters, or **PHRASE** (ASL / ISL tab) to record phrases.
+3. Choose **SPELL** to record letters, or **PHRASE** to record word signs. In PHRASE mode the
+   **ASL** / **ISL** tab decides whether the samples are ASL phrases or ISL signs. For a two-handed
+   sign keep both hands in the frame; both are saved.
 4. Type the **signer's name** (required) and pick the sign in the dropdown.
 5. Tick **Test set** only when recording the new-signer test set (see below).
 6. Click **Record dataset**. Hold the sign for 3–4 seconds while slowly changing distance and angle.
@@ -31,11 +33,16 @@ The trainer keeps all **Test set** samples out of training and reports their acc
 
 ```bash
 cd Sign-Language-Interpreter-using-Deep-Learning-master/Code
-.venv/bin/python train_classifier.py   # retrain the letter model
-.venv/bin/python evaluate.py           # curves, robustness and new-signer results
+.venv/bin/python train_classifier.py          # letter model (SVM)
+.venv/bin/python evaluate.py                  # curves, robustness and new-signer results
+.venv/bin/pip install -r requirements_train.txt   # once, for TensorFlow
+.venv/bin/python nn/train_mlp.py --kind phrase    # ASL phrase network (MLP)
+.venv/bin/python nn/train_mlp.py --kind isl       # ISL network (MLP)
 ```
 
-Or click **Retrain model** in the app. Commit `dataset/recordings/samples.csv` so teammates get the samples.
+Or click **Retrain model** in the app: it trains the model for the screen you are on (letters,
+ASL phrases or ISL). Once a phrase or ISL network exists, that screen switches from the hand-written
+rules to the network (the badge shows **NEURAL NET**). Each sign needs at least 10 training samples. Commit `dataset/recordings/samples.csv` so teammates get the samples.
 
 ## Tips for good data
 

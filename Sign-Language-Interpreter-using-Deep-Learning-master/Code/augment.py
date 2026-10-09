@@ -66,3 +66,48 @@ def augment(points, labels, copies=2, max_rotation=15.0, jitter_amount=0.01, use
         out_p.append(jitter(rotate(base_p, angles), jitter_amount, rng))
         out_y.append(base_y)
     return np.concatenate(out_p), np.concatenate(out_y)
+
+
+def _swap(label):
+    return {"Left": "Right", "Right": "Left"}.get(label, label)
+
+
+def augment_two_hands(points, hands, labels, copies=2, max_rotation=15.0, jitter_amount=0.01, use_mirror=True, seed=42):
+    """
+    Two-hand version for the phrase / ISL models.
+      points (N, 2, 21, 3) with zeros for a missing hand, hands = list of handedness pairs.
+    Mirroring flips x and swaps Left / Right, so a left-handed signer is covered.
+    Rotation turns both hands together around the first wrist, keeping their relative position.
+    """
+    rng = np.random.default_rng(seed)
+    points = np.asarray(points, dtype=np.float64)
+    labels = np.asarray(labels)
+    present = (np.abs(points).sum(axis=(2, 3)) > 0)[:, :, None, None]
+
+    base_p, base_h, base_y = [points], [list(hands)], [labels]
+    if use_mirror:
+        m = points.copy()
+        m[:, :, :, 0] = 1.0 - m[:, :, :, 0]
+        base_p.append(np.where(present, m, 0.0))
+        base_h.append([(_swap(a), _swap(b)) for a, b in hands])
+        base_y.append(labels)
+    base_p = np.concatenate(base_p)
+    base_h = sum(base_h, [])
+    base_y = np.concatenate(base_y)
+    base_present = (np.abs(base_p).sum(axis=(2, 3)) > 0)[:, :, None, None]
+
+    out_p, out_h, out_y = [base_p], [base_h], [base_y]
+    for _ in range(copies):
+        th = np.deg2rad(rng.uniform(-max_rotation, max_rotation, len(base_p)))[:, None, None]
+        c, s = np.cos(th), np.sin(th)
+        pivot = base_p[:, :1, :1]
+        q = base_p - pivot
+        x = q[..., 0] * c - q[..., 1] * s
+        y = q[..., 0] * s + q[..., 1] * c
+        r = np.stack([x, y, q[..., 2]], -1) + pivot
+        palm = np.linalg.norm(base_p[:, 0, 9, :2] - base_p[:, 0, 0, :2], axis=1)[:, None, None, None]
+        r = r + rng.normal(0.0, 1.0, r.shape) * jitter_amount * palm
+        out_p.append(np.where(base_present, r, 0.0))
+        out_h.append(base_h)
+        out_y.append(base_y)
+    return np.concatenate(out_p), sum(out_h, []), np.concatenate(out_y)

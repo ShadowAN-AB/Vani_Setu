@@ -652,6 +652,7 @@
       font-family: var(--font); cursor: pointer;
       transition: transform 0.15s, background 0.2s;
     }
+    .suggest-chip.corrected { border-style: dashed; }
     .suggest-chip:hover { background: #c8e4e7; transform: translateY(-1px); }
     .suggest-empty { font-size: 12px; color: var(--muted); }
 
@@ -1721,6 +1722,9 @@ class ASL {
     this.mode = 'PHRASE'; this.lang = 'ASL'; this.buf = []; this.mx = 14; this.thr = 9;
     this.cd = 0; this.cdm = 22; this.disp = '?';
     this.fg = [false, false, false, false, false];
+    // Holding one sign types it once: the same sign is accepted again only after the
+    // hand shows something else, becomes unsure, or leaves the frame.
+    this.lastCommit = null; this.released = true;
   }
   setLang(lang) { this.lang = lang === 'ISL' ? 'ISL' : 'ASL'; this.reset(); return this.lang; }
   toggle() { this.mode = this.mode === 'PHRASE' ? 'SPELL' : 'PHRASE'; this.reset(); return this.mode; }
@@ -1786,11 +1790,17 @@ class ASL {
     if (this.cd > 0) { this.cd--; this.disp = this._top(); return [null, this.disp]; }
     const c = {}; this.buf.forEach(x => c[x] = (c[x] || 0) + 1);
     let b = '?', bc = 0; for (const [k, v] of Object.entries(c)) if (v > bc) { b = k; bc = v; }
-    if (b !== '?' && bc >= this.thr) { this.cd = this.cdm; this.buf.length = 0; this.disp = b; return [b, b]; }
+    if (b !== '?' && bc >= this.thr) {
+      if (b === this.lastCommit && !this.released) { this.disp = b; return [null, b]; }
+      this.cd = this.cdm; this.buf.length = 0; this.disp = b;
+      this.lastCommit = b; this.released = false;
+      return [b, b];
+    }
+    if (this.lastCommit && b !== this.lastCommit && bc >= Math.ceil(this.thr / 2)) this.released = true;
     this.disp = this._top(); return [null, this.disp];
   }
   _top() { if (!this.buf.length) return '?'; const c = {}; this.buf.forEach(x => c[x] = (c[x] || 0) + 1); let b = '?', bc = 0; for (const [k, v] of Object.entries(c)) if (v > bc) { b = k; bc = v; } return b; }
-  reset() { this.buf.length = 0; this.disp = '?'; this.cd = 0; this.fg = [false, false, false, false, false]; }
+  reset() { this.buf.length = 0; this.disp = '?'; this.cd = 0; this.fg = [false, false, false, false, false]; this.released = true; }
 }
 
 // ==============================
@@ -1836,6 +1846,7 @@ class App {
     this.hl = null; this.vid = null; this.cvs = null; this.cx = null;
     this.fpsFrames = 0; this.fpsLast = performance.now(); this.fpsVal = 0;
     this.mlReady = false; this.collecting = false; this.collectEvery = 0;
+    this.signModels = {}; this._mlKind = null;
     this.lastLm = null; this.catalog = null;
     this._mlBusy = false; this._mlLabel = null; this._mlConf = 0; this._mlTop = null; this._mlMs = 0;
     // Frames below this confidence vote '?' instead of a letter. The trainer picks it on
@@ -1848,7 +1859,7 @@ class App {
     const v = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm");
     this.hl = await HandLandmarker.createFromOptions(v, {
       baseOptions: { modelAssetPath: "/hand_landmarker.task" },
-      numHands: 1, runningMode: "VIDEO",
+      numHands: 2, runningMode: "VIDEO",
       minHandDetectionConfidence: .5, minHandPresenceConfidence: .5, minTrackingConfidence: .5
     });
     document.getElementById('loaderOverlay').classList.add('gone');
@@ -1980,13 +1991,13 @@ class App {
     if (hint) {
       hint.textContent = this.asl.mode === 'SPELL'
         ? 'Letter samples → dataset/recordings/samples.csv'
-        : 'Phrase samples → dataset/recordings/samples.csv (kept apart from letters)';
+        : `${this.asl.lang} sign samples (one or two hands) → dataset/recordings/samples.csv`;
     }
   }
 
   renderConfidence(handVisible) {
     const row = document.getElementById('confRow');
-    const useMl = this.mlReady && this.asl.mode === 'SPELL';
+    const useMl = this.modelReady();
     if (!useMl) { row.style.display = 'none'; return; }
     row.style.display = 'flex';
     const pct = handVisible && this._mlTop ? Math.round(this._mlConf * 100) : 0;
@@ -1994,14 +2005,29 @@ class App {
     fill.style.width = pct + '%';
     fill.className = 'conf-fill' + (pct >= 60 ? ' high' : pct >= 30 ? ' mid' : '');
     document.getElementById('confVal').textContent =
-      pct && this._mlTop ? `${this._mlTop} ${pct}%` + (this._mlConf < this.ML_MIN_CONF ? ' (unsure)' : '') : '--';
+      pct && this._mlTop ? `${this._mlTop} ${pct}%` + (this._mlConf < this.thresholdFor(this.currentKind()) ? ' (unsure)' : '') : '--';
   }
 
   // ---- Spell autocomplete ----
+  // Word prediction: the server's noisy-channel model (suggest.py) can fix a misread
+  // letter, e.g. X-E-D -> RED. The built-in WORD_LIST prefix match is the offline fallback.
   suggestions() {
     if (this.asl.mode !== 'SPELL' || this.word.length < 2) return [];
     const p = this.word.toUpperCase();
-    return WORD_LIST.filter(w => w.startsWith(p) && w !== p).slice(0, 4);
+    if (this._sugFor !== p) {
+      this._sugFor = p;
+      this._sugItems = WORD_LIST.filter(w => w.startsWith(p) && w !== p).slice(0, 4).map(word => ({ word, corrected: false }));
+      fetch('/api/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ letters: p })
+      }).then(r => r.json()).then(data => {
+        if (this._sugFor === p && data.success && data.suggestions && data.suggestions.length) {
+          this._sugItems = data.suggestions;
+        }
+      }).catch(() => { /* keep the offline list */ });
+    }
+    return this._sugItems || [];
   }
 
   renderSuggestions() {
@@ -2010,14 +2036,16 @@ class App {
     const items = this.suggestions();
     if (!items.length) { bar.style.display = 'none'; return; }
     bar.style.display = 'flex';
-    if (list.dataset.shown === items.join(',')) return;
-    list.dataset.shown = items.join(',');
+    const key = items.map(i => i.word).join(',');
+    if (list.dataset.shown === key) return;
+    list.dataset.shown = key;
     list.innerHTML = '';
-    for (const w of items) {
+    for (const item of items) {
       const b = document.createElement('button');
-      b.className = 'suggest-chip';
-      b.textContent = w;
-      b.onclick = () => this.acceptSuggestion(w);
+      b.className = 'suggest-chip' + (item.corrected ? ' corrected' : '');
+      b.textContent = item.word;
+      if (item.corrected) b.title = 'Suggested because a letter may have been misread';
+      b.onclick = () => this.acceptSuggestion(item.word);
       list.appendChild(b);
     }
   }
@@ -2105,9 +2133,16 @@ class App {
     btn.disabled = true;
     const label = btn.textContent;
     btn.textContent = 'Training…';
-    showToast('Training the classifier, this takes a few seconds…', 'info', 6000);
+    const kind = this.currentKind();
+    showToast(kind === 'letter'
+      ? 'Training the letter classifier (SVM), this takes about half a minute…'
+      : `Training the ${kind === 'isl' ? 'ISL' : 'phrase'} neural network, this takes about a minute…`, 'info', 6000);
     try {
-      const res = await fetch('/api/train', { method: 'POST' });
+      const res = await fetch('/api/train', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind })
+      });
       const data = await res.json();
       if (data.success) {
         showToast(
@@ -2149,15 +2184,39 @@ class App {
     this.log('Switched to ' + lang, 'letter');
   }
 
+  // Which model the current screen uses: letters (SVM), ASL phrases or ISL signs (MLP networks)
+  currentKind() {
+    if (this.asl.mode === 'SPELL') return 'letter';
+    return this.asl.lang === 'ISL' ? 'isl' : 'phrase';
+  }
+
+  modelReady(kind = this.currentKind()) {
+    if (kind === 'letter') return this.mlReady;
+    return !!(this.signModels[kind] && this.signModels[kind].loaded);
+  }
+
+  thresholdFor(kind) {
+    if (kind === 'letter') return this.ML_MIN_CONF;
+    return (this.signModels[kind] && this.signModels[kind].threshold) || 0.5;
+  }
+
+  updateModelPill() {
+    const pill = document.getElementById('modelPill');
+    const kind = this.currentKind();
+    const on = this.modelReady(kind);
+    const text = on ? (kind === 'letter' ? 'ML MODEL' : 'NEURAL NET') : 'RULES';
+    if (pill.textContent !== text) pill.textContent = text;
+    pill.classList.toggle('on', on);
+  }
+
   async refreshModelStatus() {
     try {
       const res = await fetch('/api/model-status');
       const data = await res.json();
       this.mlReady = !!(data.success && data.model_loaded);
       if (data.threshold) this.ML_MIN_CONF = Number(data.threshold);
-      const pill = document.getElementById('modelPill');
-      pill.textContent = this.mlReady ? 'ML MODEL' : 'RULES';
-      pill.classList.toggle('on', this.mlReady);
+      this.signModels = data.sign_models || {};
+      this.updateModelPill();
       if (data.samples != null) document.getElementById('collectStat').textContent = data.samples + ' samples';
       // The public host turns recording and retraining off; hide those controls there
       this.trainingEnabled = data.training_enabled !== false;
@@ -2184,7 +2243,7 @@ class App {
     const btn = document.getElementById('btnRecord');
     btn.textContent = this.collecting ? 'Stop recording' : 'Record dataset';
     btn.classList.toggle('rec-on', this.collecting);
-    const kind = this.asl.mode === 'SPELL' ? 'letter' : 'phrase';
+    const kind = this.currentKind();
     const label = document.getElementById('collectLabel').value || 'sign';
     showToast(
       this.collecting
@@ -2195,16 +2254,16 @@ class App {
     );
   }
 
-  async saveSample(lm, hand) {
+  async saveSample(hands) {
     const label = document.getElementById('collectLabel').value;
-    const kind = this.asl.mode === 'SPELL' ? 'letter' : 'phrase';
+    const kind = this.currentKind();
     const signer = document.getElementById('collectSigner').value.trim();
     const split = document.getElementById('collectTest').checked ? 'test' : '';
     try {
       const res = await fetch('/api/collect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ label, landmarks: lm, kind, signer, hand, split })
+        body: JSON.stringify({ label, hands, kind, signer, split })
       });
       const data = await res.json();
       if (data.success) {
@@ -2217,13 +2276,14 @@ class App {
     } catch (e) { /* ignore dropped frames */ }
   }
 
-  async classifyMl(lm) {
+  async classifyMl(hands, kind) {
     const t0 = performance.now();
     try {
+      // Letters use the SVM on the first hand; phrase / ISL use the MLP on both hands
       const res = await fetch('/api/classify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ landmarks: lm })
+        body: JSON.stringify({ mode: kind, hands })
       });
       const data = await res.json();
       // Smoothed round-trip time (browser -> Flask -> browser), shown next to FPS
@@ -2231,7 +2291,7 @@ class App {
       this._mlMs = this._mlMs ? this._mlMs * 0.8 + ms * 0.2 : ms;
       if (!data.success || !data.label) return null;
       const conf = data.confidence == null ? 1 : Number(data.confidence);
-      return { label: data.label, confidence: conf, accepted: conf >= this.ML_MIN_CONF };
+      return { label: data.label, confidence: conf, kind, accepted: conf >= this.thresholdFor(kind) };
     } catch (e) { /* network hiccup: keep the last result */ }
     return null;
   }
@@ -2270,28 +2330,34 @@ class App {
     let sign = '?', com = null, ok = false;
     if (r.landmarks && r.landmarks.length) {
       ok = true; const lm = r.landmarks[0];
-      const hand = (r.handednesses && r.handednesses[0] && r.handednesses[0][0])
-        ? r.handednesses[0][0].categoryName : '';
+      // Up to two hands, each with MediaPipe's Left / Right label
+      const hands = r.landmarks.slice(0, 2).map((l, i) => ({
+        landmarks: l,
+        handedness: (r.handednesses && r.handednesses[i] && r.handednesses[i][0]) ? r.handednesses[i][0].categoryName : ''
+      }));
       this.lastLm = lm;
-      this.draw(lm);
+      hands.forEach(h => this.draw(h.landmarks));
       if (this.collecting) {
         this.collectEvery++;
-        if (this.collectEvery % 4 === 0) this.saveSample(lm, hand);
+        if (this.collectEvery % 4 === 0) this.saveSample(hands);
       }
-      // Letter model only — do not mix into Phrase/ISL buffers
-      const useMl = this.mlReady && this.asl.mode === 'SPELL';
+      // Use the trained model for this screen if there is one; otherwise the rules decide
+      const kind = this.currentKind();
+      const useMl = this.modelReady(kind);
       if (useMl && !this._mlBusy) {
         this._mlBusy = true;
-        this.classifyMl(lm).then(result => {
+        this.classifyMl(hands, kind).then(result => {
           if (result) {
-            // An unsure frame votes '?', so it can never push a wrong letter into the sentence
+            // An unsure frame votes '?', so it can never push a wrong sign into the sentence
             this._mlLabel = result.accepted ? result.label : '?';
             this._mlTop = result.label;
             this._mlConf = result.confidence;
+            this._mlKind = result.kind;
           }
         }).finally(() => { this._mlBusy = false; });
       }
-      const forced = useMl ? this._mlLabel : null;
+      // Ignore a result that belongs to the previous screen (e.g. a letter after switching to Phrase)
+      const forced = useMl && this._mlKind === kind ? this._mlLabel : null;
       [com, sign] = this.asl.update(lm, forced);
     } else {
       this.asl.reset();
@@ -2384,7 +2450,8 @@ class App {
     document.getElementById('stWords').textContent = this.words;
     document.getElementById('stSent').textContent = this.sents;
     document.getElementById('fpsBadge').textContent = this.fpsVal + ' FPS'
-      + (this.mlReady && this.asl.mode === 'SPELL' && this._mlMs ? ` · ${Math.round(this._mlMs)} ms` : '');
+      + (this.modelReady() && this._mlMs ? ` · ${Math.round(this._mlMs)} ms` : '');
+    this.updateModelPill();
     this.renderConfidence(ok);
     this.renderSuggestions();
 
