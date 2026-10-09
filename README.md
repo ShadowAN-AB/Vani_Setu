@@ -109,9 +109,10 @@ Flask API ──► SVM, 88 features (Spell)
 Also included:
 
 - Email + password login (hashed passwords in a local **SQLite** file)
-- Live confidence bar in Spell mode
-- Word prediction while spelling: a noisy-channel model (word frequencies × the letter model's confusion matrix) can fix a misread letter, e.g. X-E-D → RED
-- Record dataset + **Retrain model** from the browser
+- Live confidence bar whenever a trained model is in use, plus a **ML MODEL / NEURAL NET / RULES** badge
+- Word prediction while spelling: a noisy-channel model (word frequencies × the letter model's confusion matrix) can fix a misread letter, e.g. X-E-D → RED; corrected suggestions have a dashed border
+- Holding a sign types it once; drop the hand briefly for a double letter
+- Record dataset (with signer name and a **Test set** box) + **Retrain model** from the browser, on localhost
 - Sign Guide overlay
 
 ---
@@ -119,10 +120,11 @@ Also included:
 ## How it works
 
 1. You create an account or sign in.
-2. The browser camera + **MediaPipe Hand Landmarker** finds 21 landmarks on one hand. Tracking stays on the device.
-3. Spell mode sends the 21 landmarks to Flask (`/api/classify`), which computes 88 features and returns the most likely letter, its probability and the top 3. Frames below the confidence threshold picked during training vote “unsure”, and a 14-frame vote reduces flicker.
-4. Phrase / ISL modes match poses with rules unless you record your own phrase samples.
-5. You assemble a sentence, speak it, or translate it.
+2. The browser camera + **MediaPipe Hand Landmarker** finds 21 landmarks on each of up to two hands. Tracking stays on the device; only the landmark numbers go to the server.
+3. **Spell** sends the landmarks to Flask (`/api/classify`), which computes 88 features and returns the most likely letter, its probability and the top 3 from the SVM. Frames below the confidence threshold chosen on validation data (0.70) vote “unsure”, and a 14-frame vote reduces flicker.
+4. **Phrase / ISL** send both hands to the same endpoint. If a neural network has been trained for that screen it answers (181 two-hand features); otherwise hand-written finger rules decide.
+5. While you spell, `/api/suggest` ranks likely words, even if a letter was misread.
+6. You assemble a sentence, speak it, or translate it.
 
 Login does **not** need MongoDB. Accounts are stored in `Sign-Language-Interpreter-using-Deep-Learning-master/Code/users.db`. On a host you can set `DATABASE_URL` for Postgres instead.
 
@@ -247,7 +249,7 @@ Hosted deploy notes (Render, HTTPS, guest login): see [DEPLOY.md](DEPLOY.md).
 ## Retrain / record
 
 - **Record dataset** in the UI saves raw landmarks with the signer's name to `Code/dataset/recordings/samples.csv` (letters and phrases, kept apart). Tick **Test set** to hold a person's samples out for new-signer testing. Recording and retraining work on localhost only.
-- **Retrain model** in the UI trains the SVM and reloads it without restarting Flask.
+- **Retrain model** in the UI trains the model for the screen you are on (letters → SVM, Phrase / ISL → neural network) and reloads it without restarting Flask. The neural networks need TensorFlow on your laptop: `pip install -r requirements_train.txt`.
 - From a terminal:
 
 ```bash
@@ -290,11 +292,13 @@ Vani-Setu/
         ├── suggest.py                 ← noisy-channel word prediction
         ├── nn/train_mlp.py            ← Keras MLP (letters / phrases / ISL)
         ├── nn/numpy_mlp.py            ← runs the exported MLP with NumPy on the server
-        ├── requirements_web.txt
+        ├── build_wordlist.py          ← wordfreq → word_frequencies.csv
+        ├── requirements_web.txt       ← server
+        ├── requirements_train.txt     ← TensorFlow + wordfreq, for training only
         ├── .env.example
-        ├── dataset/                   ← asl_now_landmarks.csv, recordings/, guides
-        ├── reports/                   ← metrics, evaluation, figures
-        └── models/sign_svm.joblib     ← trained letter SVM (in git)
+        ├── dataset/                   ← asl_now_landmarks.csv, word_frequencies.csv, recordings/, guides
+        ├── reports/                   ← metrics, evaluation, model comparison, neural-network curves
+        └── models/                    ← sign_svm.joblib (letters), letter_mlp.npz, phrase / isl _mlp.npz once trained
     └── legacy/                        ← original HackUNT-19 CNN code (unused, credited)
 ```
 
@@ -311,10 +315,10 @@ See `Code/dataset/DATASET_SOURCE.md` and `RECORDING_GUIDE.md`.
 
 ## Honest limits
 
-- One hand, mostly **static** poses. Motion letters **J** and **Z** are weak.
-- Spell ML is **ASL fingerspelling**, not a full sign-language corpus.
-- ISL in the app is a **classroom approximation**.
-- Phrase mode is rule-based until you record phrase samples.
+- Recognition uses single frames, so motion letters **J** and **Z** are only partly covered (an LSTM over frame sequences is the next step).
+- Spell ML is **ASL fingerspelling**, not a full sign-language corpus; facial expressions are ignored.
+- Phrase and ISL modes use rules until you record samples and train their networks; the built-in ISL rules are a **classroom approximation**.
+- Accuracy is measured on the ASL Now dataset; record a new-signer test set (**Test set** box) to measure it on new people.
 - Browser camera works on `http://127.0.0.1` but **needs HTTPS** on a public URL.
 - This is a demo, not a production account system (session is `sessionStorage` after login).
 
