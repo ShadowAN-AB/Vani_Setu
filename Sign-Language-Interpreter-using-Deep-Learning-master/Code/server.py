@@ -102,15 +102,8 @@ OTP_EXPIRY_SECONDS = 300
 MAX_ATTEMPTS = 5
 RATE_LIMIT_SECONDS = 60
 
-SUPPORTED_LANGUAGES = {
-    "en": "English", "hi": "Hindi", "fr": "French", "es": "Spanish",
-    "de": "German", "ja": "Japanese", "ar": "Arabic", "bn": "Bengali",
-    "ta": "Tamil", "ko": "Korean", "pt": "Portuguese", "ru": "Russian",
-    "zh-CN": "Chinese (Simplified)", "ur": "Urdu", "mr": "Marathi",
-    "te": "Telugu", "gu": "Gujarati", "kn": "Kannada", "ml": "Malayalam",
-    "pa": "Punjabi", "or": "Odia", "it": "Italian", "tr": "Turkish",
-    "th": "Thai", "vi": "Vietnamese",
-}
+# The app translates the sentence into Hindi only; English is the source language.
+SUPPORTED_LANGUAGES = {"en": "English", "hi": "Hindi"}
 
 otp_store = {}
 store_lock = Lock()

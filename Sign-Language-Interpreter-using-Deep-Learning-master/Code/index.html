@@ -830,7 +830,7 @@
         <div class="brand-meta">
           <span>Camera-local</span>
           <span>Password login</span>
-          <span>25+ languages</span>
+          <span>English + Hindi</span>
         </div>
       </section>
 
@@ -984,14 +984,6 @@
           <div class="lang-tab" style="color:var(--muted);font-size:11px;letter-spacing:0.08em;">OUTPUT</div>
           <div class="lang-tab active" data-lang="en">English</div>
           <div class="lang-tab" data-lang="hi">Hindi</div>
-          <div class="lang-tab" data-lang="fr">French</div>
-          <div class="lang-tab" data-lang="es">Spanish</div>
-          <div class="lang-tab" data-lang="de">German</div>
-          <div class="lang-tab" data-lang="ja">Japanese</div>
-          <button class="lang-more-btn" id="langMoreBtn">More</button>
-        </div>
-        <div class="lang-dropdown" id="langDropdown">
-          <input class="lang-dropdown-search" id="langSearch" placeholder="Search languages..." type="text">
         </div>
 
         <div class="trans-pane">
@@ -1083,13 +1075,15 @@
     <div class="about-wrap">
       <div class="about-card">
         <h2>About Vani-Setu</h2>
-        <p>Vani-Setu (“voice-bridge”) is a camera-based sign language translator for classroom and accessibility demos. It tracks one hand with MediaPipe, maps poses to words or letters, speaks the result, and can translate English into Hindi and other languages.</p>
+        <p>Vani-Setu (“voice-bridge”) is a camera-based sign language translator for classroom and accessibility demos. It tracks one or two hands with MediaPipe, recognises letters and signs with machine learning, speaks the result, and shows the sentence in English and Hindi.</p>
       </div>
       <div class="about-card">
         <h2>College iteration</h2>
         <ul>
-          <li>Working <b>Indian Sign Language (ISL)</b> input mode — simplified single-hand classroom signs.</li>
-          <li>A <b>landmark dataset recorder</b> and Random Forest trainer with a confusion matrix for the report.</li>
+          <li>Letters A–Z with an <b>SVM</b> on 88 hand features (96.9% test accuracy), robust to the other hand and a tilted or distant hand.</li>
+          <li>A <b>neural network</b> (MLP) for ASL phrases and <b>Indian Sign Language (ISL)</b> signs once you record samples; rules until then.</li>
+          <li>Word prediction that can fix a misread letter, and a <b>Dictionary</b> showing how to make every sign.</li>
+          <li>A <b>landmark dataset recorder</b> with signer names and a test-set option, and retraining from the browser.</li>
           <li>Offline Hindi fallback when Google Translate is unavailable.</li>
           <li>SMTP secrets moved to <code>.env</code>. OTP prints in the terminal when email is not set.</li>
         </ul>
@@ -1097,8 +1091,8 @@
       <div class="about-card">
         <h2>Honest limits</h2>
         <ul>
-          <li>One hand, static poses only (no motion letters J/Z, no two-handed ISL).</li>
-          <li>Rule-based poses until you record samples and run <code>train_classifier.py</code>.</li>
+          <li>Single frames only, so the motion letters J and Z are only partly recognised.</li>
+          <li>Phrase and ISL modes use rules until you record samples and retrain.</li>
           <li>ISL here is a teaching approximation, not a certified ISL lexicon.</li>
         </ul>
       </div>
@@ -1125,32 +1119,10 @@ import { HandLandmarker, FilesetResolver }
 // ==============================
 // LANGUAGE CONFIG
 // ==============================
+// Output languages: the sentence is shown in English and can be translated into Hindi
 const LANGUAGES = [
-  { code: 'en',    name: 'English',              flag: '🇺🇸' },
-  { code: 'hi',    name: 'Hindi',                flag: '🇮🇳' },
-  { code: 'fr',    name: 'French',               flag: '🇫🇷' },
-  { code: 'es',    name: 'Spanish',              flag: '🇪🇸' },
-  { code: 'de',    name: 'German',               flag: '🇩🇪' },
-  { code: 'ja',    name: 'Japanese',             flag: '🇯🇵' },
-  { code: 'ar',    name: 'Arabic',               flag: '🇸🇦' },
-  { code: 'bn',    name: 'Bengali',              flag: '🇧🇩' },
-  { code: 'ta',    name: 'Tamil',                flag: '🇮🇳' },
-  { code: 'ko',    name: 'Korean',               flag: '🇰🇷' },
-  { code: 'pt',    name: 'Portuguese',           flag: '🇧🇷' },
-  { code: 'ru',    name: 'Russian',              flag: '🇷🇺' },
-  { code: 'zh-CN', name: 'Chinese (Simplified)', flag: '🇨🇳' },
-  { code: 'ur',    name: 'Urdu',                 flag: '🇵🇰' },
-  { code: 'mr',    name: 'Marathi',              flag: '🇮🇳' },
-  { code: 'te',    name: 'Telugu',               flag: '🇮🇳' },
-  { code: 'gu',    name: 'Gujarati',             flag: '🇮🇳' },
-  { code: 'kn',    name: 'Kannada',              flag: '🇮🇳' },
-  { code: 'ml',    name: 'Malayalam',             flag: '🇮🇳' },
-  { code: 'pa',    name: 'Punjabi',              flag: '🇮🇳' },
-  { code: 'or',    name: 'Odia',                 flag: '🇮🇳' },
-  { code: 'it',    name: 'Italian',              flag: '🇮🇹' },
-  { code: 'tr',    name: 'Turkish',              flag: '🇹🇷' },
-  { code: 'th',    name: 'Thai',                 flag: '🇹🇭' },
-  { code: 'vi',    name: 'Vietnamese',           flag: '🇻🇳' },
+  { code: 'en', name: 'English', flag: '🇬🇧' },
+  { code: 'hi', name: 'Hindi',   flag: '🇮🇳' },
 ];
 
 // ==============================
@@ -1522,56 +1494,6 @@ class TranslationController {
       tab.addEventListener('click', () => this.selectLang(tab.dataset.lang));
     });
 
-    // Populate dropdown with all languages
-    this.populateDropdown();
-
-    // "More" button
-    document.getElementById('langMoreBtn').addEventListener('click', (e) => {
-      e.stopPropagation();
-      document.getElementById('langDropdown').classList.toggle('show');
-      setTimeout(() => document.getElementById('langSearch').focus(), 100);
-    });
-
-    // Close dropdown on outside click
-    document.addEventListener('click', (e) => {
-      if (!document.getElementById('langDropdown').contains(e.target) &&
-          e.target.id !== 'langMoreBtn') {
-        document.getElementById('langDropdown').classList.remove('show');
-      }
-    });
-
-    // Search filter
-    document.getElementById('langSearch').addEventListener('input', (e) => {
-      this.filterDropdown(e.target.value);
-    });
-  }
-
-  populateDropdown() {
-    const dropdown = document.getElementById('langDropdown');
-    const searchInput = dropdown.querySelector('.lang-dropdown-search');
-
-    LANGUAGES.forEach(lang => {
-      const item = document.createElement('button');
-      item.className = 'lang-dropdown-item' + (lang.code === this.currentLang ? ' active' : '');
-      item.dataset.lang = lang.code;
-      item.innerHTML = `<span class="lang-flag">${lang.flag}</span> ${lang.name}`;
-      item.addEventListener('click', () => {
-        this.selectLang(lang.code);
-        dropdown.classList.remove('show');
-        document.getElementById('langSearch').value = '';
-        this.filterDropdown('');
-      });
-      dropdown.appendChild(item);
-    });
-  }
-
-  filterDropdown(query) {
-    const items = document.querySelectorAll('.lang-dropdown-item');
-    const q = query.toLowerCase();
-    items.forEach(item => {
-      const name = item.textContent.toLowerCase();
-      item.style.display = name.includes(q) ? '' : 'none';
-    });
   }
 
   selectLang(code) {
@@ -1582,11 +1504,6 @@ class TranslationController {
     // Update tab active states
     document.querySelectorAll('#outputLangRow .lang-tab[data-lang]').forEach(tab => {
       tab.classList.toggle('active', tab.dataset.lang === code);
-    });
-
-    // Update dropdown active states
-    document.querySelectorAll('.lang-dropdown-item').forEach(item => {
-      item.classList.toggle('active', item.dataset.lang === code);
     });
 
     // Update output badge
