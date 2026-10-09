@@ -799,6 +799,40 @@
     .guide-item b { display: block; color: var(--teal-deep); margin-bottom: 4px; font-size: 13px; }
     .guide-item span { color: var(--ink-soft); font-size: 12px; line-height: 1.45; }
 
+    /* Dictionary */
+    .modal-card.dict-card-wide { width: min(1040px, 96vw); }
+    .dict-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
+    .dict-search {
+      flex: 1 1 200px; padding: 9px 12px; font-size: 13px; border-radius: 10px;
+      border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-family: var(--font);
+    }
+    .dict-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+    .dict-seg button {
+      padding: 8px 12px; font-size: 12px; font-weight: 600; border: 0; background: var(--surface);
+      color: var(--ink-soft); cursor: pointer; font-family: var(--font);
+    }
+    .dict-seg button + button { border-left: 1px solid var(--line); }
+    .dict-seg button.on { background: var(--teal-soft); color: var(--teal-deep); }
+    .dict-count { font-size: 12px; color: var(--muted); margin-top: 10px; }
+    .dict-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; margin-top: 8px; }
+    .dict-item {
+      display: flex; gap: 12px; align-items: flex-start;
+      background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 12px;
+    }
+    .dict-item svg { flex: 0 0 84px; width: 84px; height: 84px; background: var(--surface); border-radius: 10px; border: 1px solid var(--line); }
+    .dict-body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+    .dict-name { font-family: var(--display); font-size: 1.15rem; color: var(--teal-deep); line-height: 1.1; }
+    .dict-hi { font-size: 12px; color: var(--amber); font-weight: 600; }
+    .dict-how { font-size: 12px; color: var(--ink-soft); line-height: 1.5; }
+    .dict-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 2px; }
+    .dict-badge { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; padding: 2px 7px; border-radius: 6px; background: var(--amber-soft); color: var(--amber); }
+    .dict-try {
+      font-size: 11px; font-weight: 600; padding: 4px 9px; border-radius: 7px; cursor: pointer;
+      border: 1px solid var(--line-strong); background: var(--surface); color: var(--teal-deep); font-family: var(--font);
+    }
+    .dict-try:hover { background: var(--teal-soft); }
+    .dict-empty { color: var(--muted); font-size: 13px; padding: 20px 4px; }
+
     @media (max-width: 960px) {
       .login-shell { grid-template-columns: 1fr; }
       .login-hero { min-height: 240px; }
@@ -915,7 +949,7 @@
       </div>
       <div class="nav-links">
         <a href="#" class="nav-link active" id="navHome">Home</a>
-        <a href="#" class="nav-link" id="navGuide">Sign Guide</a>
+        <a href="#" class="nav-link" id="navGuide">Dictionary</a>
         <a href="#" class="nav-link" id="navAbout">About</a>
         <div class="nav-user" id="navUser">
           <div class="nav-avatar" id="navAvatar">V</div>
@@ -1100,18 +1134,32 @@
   </div>
 
   <div class="modal" id="guideModal">
-    <div class="modal-card">
+    <div class="modal-card dict-card-wide" role="dialog" aria-labelledby="guideTitle">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
         <div>
-          <div class="sign-label">How to sign</div>
-          <h2 id="guideTitle" style="font-family:var(--display);font-size:1.4rem;margin-top:4px;color:var(--teal-deep);">ASL phrase guide</h2>
+          <div class="sign-label">How to make each sign · हर चिह्न कैसे बनाएँ</div>
+          <h2 id="guideTitle" style="font-family:var(--display);font-size:1.4rem;margin-top:4px;color:var(--teal-deep);">Dictionary · शब्दकोश</h2>
         </div>
         <button class="ctrl-btn" id="guideClose" style="flex:0;min-width:70px;">Close</button>
       </div>
-      <p style="color:var(--ink-soft);font-size:13px;margin-top:8px;line-height:1.6;">Hold each pose still for about one second. The app commits a sign only after several agreeing frames.</p>
-      <div class="guide-grid" id="guideGrid"></div>
+      <p style="color:var(--ink-soft);font-size:13px;margin-top:8px;line-height:1.6;">Drawings show the hand as you see it on screen (mirrored, right hand). Letters are drawn from real recorded hands. Hold each sign still for about one second; it is typed once.</p>
+      <div class="dict-toolbar">
+        <div class="dict-seg" id="dictTabs">
+          <button data-tab="letter">Letters A–Z</button>
+          <button data-tab="phrase">ASL phrases</button>
+          <button data-tab="isl">ISL signs</button>
+        </div>
+        <input class="dict-search" id="dictSearch" type="search" placeholder="Search a sign or Hindi word…" aria-label="Search the dictionary">
+        <div class="dict-seg" id="dictLang">
+          <button data-lang="en">English</button>
+          <button data-lang="hi">हिन्दी</button>
+        </div>
+      </div>
+      <div class="dict-count" id="dictCount"></div>
+      <div class="dict-grid" id="guideGrid"></div>
     </div>
   </div>
+
 <script type="module">
 import { HandLandmarker, FilesetResolver }
   from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
@@ -1764,6 +1812,7 @@ class App {
     this.fpsFrames = 0; this.fpsLast = performance.now(); this.fpsVal = 0;
     this.mlReady = false; this.collecting = false; this.collectEvery = 0;
     this.signModels = {}; this._mlKind = null;
+    this.dictionary = null; this.dictTab = 'letter'; this.dictLang = 'en'; this.dictQuery = '';
     this.lastLm = null; this.catalog = null;
     this._mlBusy = false; this._mlLabel = null; this._mlConf = 0; this._mlTop = null; this._mlMs = 0;
     // Frames below this confidence vote '?' instead of a letter. The trainer picks it on
@@ -1841,6 +1890,14 @@ class App {
     document.getElementById('navGuide').onclick = (e) => { e.preventDefault(); this.toggleGuide(); };
     document.getElementById('guideClose').onclick = () => this.toggleGuide(false);
     document.getElementById('guideModal').onclick = (e) => { if (e.target.id === 'guideModal') this.toggleGuide(false); };
+    document.querySelectorAll('#dictTabs button').forEach(b => b.onclick = () => { this.dictTab = b.dataset.tab; this.renderGuide(); });
+    document.querySelectorAll('#dictLang button').forEach(b => b.onclick = () => { this.dictLang = b.dataset.lang; this.renderGuide(); });
+    document.getElementById('dictSearch').oninput = (e) => { this.dictQuery = e.target.value; this.renderGuide(); };
+    document.getElementById('guideGrid').onclick = (e) => {
+      const btn = e.target.closest('.dict-try');
+      if (btn) this.tryDictSign(btn.dataset.tab, btn.dataset.sign);
+    };
+    this.loadDictionary();
     document.querySelectorAll('#inputLangRow .lang-tab[data-input]').forEach(tab => {
       tab.onclick = () => this.setInputLang(tab.dataset.input);
     });
@@ -1887,7 +1944,27 @@ class App {
     const open = force === undefined ? !modal.classList.contains('show') : force;
     modal.classList.toggle('show', open);
     document.getElementById('navGuide').classList.toggle('active', open);
-    if (open) this.renderGuide();
+    if (open) {
+      this.dictTab = this.currentKind();
+      this.renderGuide();
+    }
+  }
+
+  async loadDictionary() {
+    try {
+      const res = await fetch('/api/dictionary');
+      const data = await res.json();
+      if (data.success) this.dictionary = data.dictionary;
+    } catch (e) { /* the old short guide is used instead */ }
+  }
+
+  // Close the dictionary and switch to the screen where this sign is recognised
+  tryDictSign(tab, sign) {
+    this.toggleGuide(false);
+    const wantSpell = tab === 'letter';
+    if ((this.asl.mode === 'SPELL') !== wantSpell) this.doMode();
+    if (!wantSpell) this.setInputLang(tab === 'isl' ? 'ISL' : 'ASL');
+    showToast(`Now show “${sign}” to the camera and hold it still`, 'info', 3500);
   }
 
   async loadCatalog() {
@@ -2012,7 +2089,8 @@ class App {
     el.textContent = next;
     el.classList.remove('correct');
     document.getElementById('quizHint').textContent =
-      S_INFO[next] || 'Sign this letter and hold it steady';
+      (this.dictionary && (this.dictionary.letter.find(e => e.sign === next) || {}).how)
+      || S_INFO[next] || 'Sign this letter and hold it steady';
     this.renderQuiz();
   }
 
@@ -2080,15 +2158,80 @@ class App {
   }
 
   renderGuide() {
-    const phrases = this.asl.lang === 'ISL' ? I_INFO : P_INFO;
-    const title = this.asl.mode === 'SPELL'
-      ? `${this.asl.lang} fingerspelling`
-      : `${this.asl.lang} phrase guide`;
-    document.getElementById('guideTitle').textContent = title;
-    const src = this.asl.mode === 'SPELL' ? S_INFO : phrases;
-    document.getElementById('guideGrid').innerHTML = Object.entries(src)
-      .map(([k, v]) => `<div class="guide-item"><b>${this.esc(k)}</b><span>${this.esc(v)}</span></div>`)
-      .join('');
+    this.dictTab = this.dictTab || 'letter';
+    this.dictLang = this.dictLang || 'en';
+    document.querySelectorAll('#dictTabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === this.dictTab));
+    document.querySelectorAll('#dictLang button').forEach(b => b.classList.toggle('on', b.dataset.lang === this.dictLang));
+    const grid = document.getElementById('guideGrid');
+    const count = document.getElementById('dictCount');
+    if (!this.dictionary) {
+      // Server not reachable: fall back to the short built-in descriptions
+      const src = this.dictTab === 'letter' ? S_INFO : (this.dictTab === 'isl' ? I_INFO : P_INFO);
+      count.textContent = '';
+      grid.innerHTML = Object.entries(src)
+        .map(([k, v]) => `<div class="dict-item"><div class="dict-body"><div class="dict-name">${this.esc(k)}</div><div class="dict-how">${this.esc(v)}</div></div></div>`)
+        .join('');
+      return;
+    }
+    const q = (this.dictQuery || '').trim().toLowerCase();
+    const entries = (this.dictionary[this.dictTab] || []).filter(e => !q
+      || e.sign.toLowerCase().includes(q) || (e.hindi || '').includes(q)
+      || e.how.toLowerCase().includes(q) || (e.how_hi || '').includes(q));
+    const names = { letter: 'letters', phrase: 'ASL phrases', isl: 'ISL signs' };
+    count.textContent = `${entries.length} ${names[this.dictTab]}` + (this.dictTab === 'letter' ? ' · J and Z are drawn in the air' : ' · as recognised by Vani-Setu');
+    if (!entries.length) { grid.innerHTML = '<div class="dict-empty">No sign matches that search.</div>'; return; }
+    grid.innerHTML = entries.map(e => {
+      const drawing = e.shape ? this.letterSVG(e.shape) : this.poseSVG(e.pose || {});
+      const how = this.dictLang === 'hi' && e.how_hi ? e.how_hi : e.how;
+      const hindi = e.hindi ? `<div class="dict-hi">${this.esc(e.hindi)}</div>` : '';
+      const motion = e.motion ? '<span class="dict-badge">MOVES</span>' : '';
+      return `<div class="dict-item">${drawing}<div class="dict-body">`
+        + `<div class="dict-name">${this.esc(e.sign)}</div>${hindi}`
+        + `<div class="dict-how">${this.esc(how)}</div>`
+        + `<div class="dict-meta">${motion}<button class="dict-try" data-tab="${this.dictTab}" data-sign="${this.esc(e.sign)}">Try it</button></div>`
+        + `</div></div>`;
+    }).join('');
+  }
+
+  // A real recorded hand (21 points in a unit box) drawn as bones and joints; thumb in amber
+  letterSVG(shape) {
+    const P = shape.map(([x, y]) => [8 + x * 84, 8 + y * 84]);
+    const bone = (a, b, c, w) => `<line x1="${P[a][0].toFixed(1)}" y1="${P[a][1].toFixed(1)}" x2="${P[b][0].toFixed(1)}" y2="${P[b][1].toFixed(1)}" stroke="${c}" stroke-width="${w}" stroke-linecap="round"/>`;
+    let out = '';
+    for (const [a, b] of HC) out += bone(a, b, (a <= 4 && b <= 4) ? 'var(--amber)' : 'var(--teal)', 3);
+    for (let i = 0; i < 21; i++) {
+      const tip = [4, 8, 12, 16, 20].includes(i);
+      out += `<circle cx="${P[i][0].toFixed(1)}" cy="${P[i][1].toFixed(1)}" r="${tip ? 3.6 : 2.2}" fill="${i <= 4 && i > 0 ? 'var(--amber)' : (tip ? 'var(--teal-deep)' : 'var(--line-strong)')}"/>`;
+    }
+    return `<svg viewBox="0 0 100 100" role="img" aria-hidden="true">${out}</svg>`;
+  }
+
+  // A simple hand diagram from the pose: raised fingers long, folded fingers short, thumb in amber
+  poseSVG(pose) {
+    const up = pose.up || '';
+    const fingers = [['I', 36, 30, -9], ['M', 46, 34, -3], ['R', 56, 31, 3], ['P', 65, 24, 10]];
+    let out = '<rect x="30" y="56" width="42" height="36" rx="11" fill="var(--teal-soft)" stroke="var(--teal)" stroke-width="2"/>';
+    for (const [f, x, len, ang] of fingers) {
+      if (f === 'I' && pose.circle) continue;
+      if (up.includes(f)) {
+        const a = pose.spread ? ang : 0;
+        out += `<rect x="${x - 4.5}" y="${58 - len}" width="9" height="${len + 4}" rx="4.5" fill="var(--teal)" transform="rotate(${a} ${x} 60)"/>`;
+      } else {
+        out += `<rect x="${x - 4.5}" y="48" width="9" height="12" rx="4.5" fill="var(--line-strong)"/>`;
+      }
+    }
+    if (pose.circle) {
+      out += '<circle cx="30" cy="44" r="9" fill="none" stroke="var(--teal)" stroke-width="5"/>';
+    } else if (pose.thumb === 'up' || (up.includes('T') && !pose.thumb)) {
+      out += '<rect x="22" y="30" width="10" height="34" rx="5" fill="var(--amber)"/>';
+    } else if (pose.thumb === 'out' || up.includes('T')) {
+      out += '<rect x="9" y="56" width="10" height="28" rx="5" fill="var(--amber)" transform="rotate(-48 26 78)"/>';
+    } else if (pose.thumb === 'top') {
+      out += '<rect x="26" y="52" width="30" height="9" rx="4.5" fill="var(--amber)"/>';
+    } else {
+      out += '<rect x="30" y="70" width="26" height="9" rx="4.5" fill="var(--amber)" opacity="0.75" transform="rotate(-18 30 74)"/>';
+    }
+    return `<svg viewBox="0 0 100 100" role="img" aria-hidden="true">${out}</svg>`;
   }
 
   setInputLang(lang) {

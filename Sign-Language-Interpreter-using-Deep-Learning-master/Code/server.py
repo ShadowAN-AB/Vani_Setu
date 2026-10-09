@@ -24,7 +24,7 @@ from features import hands_to_two_hand_features, landmarks_to_features
 from nn.numpy_mlp import NumpyMLP
 from suggest import Suggester
 from models_user import User, db, init_db
-from signs import OFFLINE_HI, catalog
+from signs import OFFLINE_HI, catalog, dictionary
 
 try:
     from dotenv import load_dotenv
@@ -436,6 +436,24 @@ def get_languages():
 @app.route("/api/signs", methods=["GET"])
 def get_signs():
     return jsonify({"success": True, "catalog": catalog()})
+
+
+def _load_sign_shapes():
+    path = os.path.join(DATA_DIR, "sign_shapes.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f).get("shapes", {})
+    except (OSError, ValueError):
+        return {}
+
+
+SIGN_SHAPES = _load_sign_shapes()
+
+
+@app.route("/api/dictionary", methods=["GET"])
+def get_dictionary():
+    """How to make every letter and sign, in English and Hindi, with hand drawings."""
+    return jsonify({"success": True, "dictionary": dictionary(SIGN_SHAPES)})
 
 
 @app.route("/api/health", methods=["GET"])
