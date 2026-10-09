@@ -514,6 +514,11 @@
       padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line);
       background: var(--surface); color: var(--ink); font-size: 12px; font-weight: 600;
     }
+    .collect-bar input[type=text] {
+      width: 120px; padding: 8px 10px; font-size: 12px; border-radius: 8px;
+      border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+    }
+    .collect-bar label.test-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
     .collect-bar button.rec-on {
       border-color: #efb4af; color: var(--danger); background: var(--danger-soft);
     }
@@ -960,6 +965,10 @@
             </div>
             <div class="collect-bar">
               <select id="collectLabel"></select>
+              <input type="text" id="collectSigner" placeholder="Signer name" maxlength="40" aria-label="Signer name">
+              <label class="test-toggle" title="Keep these samples out of training and use them to test the model on a new person">
+                <input type="checkbox" id="collectTest"> Test set
+              </label>
               <button id="btnRecord">Record dataset</button>
               <button id="btnTrain">Retrain model</button>
               <span id="collectStat" style="font-size:11px;color:var(--muted);">0 samples</span>
@@ -1908,6 +1917,10 @@ class App {
       tab.onclick = () => this.setInputLang(tab.dataset.input);
     });
     document.getElementById('btnRecord').onclick = () => this.toggleRecord();
+    try {
+      const savedSigner = localStorage.getItem('vani_signer');
+      if (savedSigner) document.getElementById('collectSigner').value = savedSigner;
+    } catch (e) { /* storage blocked */ }
     document.getElementById('btnTrain').onclick = () => this.retrainModel();
     document.getElementById('btnPractice').onclick = () => this.startQuiz();
     document.getElementById('quizSkip').onclick = () => this.nextQuizTarget(true);
@@ -1966,8 +1979,8 @@ class App {
     const hint = document.getElementById('collectHint');
     if (hint) {
       hint.textContent = this.asl.mode === 'SPELL'
-        ? 'Spell recording → landmarks.csv (letter model)'
-        : 'Phrase recording → landmarks_phrases.csv (your data)';
+        ? 'Letter samples → dataset/recordings/samples.csv'
+        : 'Phrase samples → dataset/recordings/samples.csv (kept apart from letters)';
     }
   }
 
@@ -2147,9 +2160,10 @@ class App {
       if (data.samples != null) document.getElementById('collectStat').textContent = data.samples + ' samples';
       // The public host turns recording and retraining off; hide those controls there
       this.trainingEnabled = data.training_enabled !== false;
-      ['btnRecord', 'btnTrain', 'collectLabel', 'collectHint'].forEach(id => {
+      ['btnRecord', 'btnTrain', 'collectLabel', 'collectHint', 'collectSigner', 'collectTest'].forEach(id => {
         const el = document.getElementById(id);
-        if (el) el.style.display = this.trainingEnabled ? '' : 'none';
+        const target = id === 'collectTest' ? el && el.parentElement : el;
+        if (target) target.style.display = this.trainingEnabled ? '' : 'none';
       });
       if (!this.trainingEnabled) document.getElementById('collectStat').textContent = 'Recording is available when running locally';
     } catch (e) {
@@ -2158,6 +2172,13 @@ class App {
   }
 
   toggleRecord() {
+    const signerInput = document.getElementById('collectSigner');
+    if (!this.collecting && !signerInput.value.trim()) {
+      showToast('Type the signer\'s name first, so their samples can be kept apart for testing', 'error', 3500);
+      signerInput.focus();
+      return;
+    }
+    try { localStorage.setItem('vani_signer', signerInput.value.trim()); } catch (e) { /* storage blocked */ }
     this.collecting = !this.collecting;
     const btn = document.getElementById('btnRecord');
     btn.textContent = this.collecting ? 'Stop recording' : 'Record dataset';
@@ -2173,21 +2194,24 @@ class App {
     );
   }
 
-  async saveSample(lm) {
+  async saveSample(lm, hand) {
     const label = document.getElementById('collectLabel').value;
     const kind = this.asl.mode === 'SPELL' ? 'letter' : 'phrase';
+    const signer = document.getElementById('collectSigner').value.trim();
+    const split = document.getElementById('collectTest').checked ? 'test' : '';
     try {
       const res = await fetch('/api/collect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ label, landmarks: lm, kind })
+        body: JSON.stringify({ label, landmarks: lm, kind, signer, hand, split })
       });
       const data = await res.json();
       if (data.success) {
         const target = data.target || 25;
         const done = data.label_count >= target ? ' ✓ goal met' : '';
+        const where = data.split === 'test' ? 'test set' : 'training';
         document.getElementById('collectStat').textContent =
-          `${data.label_count}/${target} × ${data.label}  (${data.samples} in ${data.path})${done}`;
+          `${data.label_count}/${target} × ${data.label} (${where}, ${data.samples} ${data.kind} samples)${done}`;
       }
     } catch (e) { /* ignore dropped frames */ }
   }
@@ -2242,11 +2266,13 @@ class App {
     let sign = '?', com = null, ok = false;
     if (r.landmarks && r.landmarks.length) {
       ok = true; const lm = r.landmarks[0];
+      const hand = (r.handednesses && r.handednesses[0] && r.handednesses[0][0])
+        ? r.handednesses[0][0].categoryName : '';
       this.lastLm = lm;
       this.draw(lm);
       if (this.collecting) {
         this.collectEvery++;
-        if (this.collectEvery % 4 === 0) this.saveSample(lm);
+        if (this.collectEvery % 4 === 0) this.saveSample(lm, hand);
       }
       // Letter model only — do not mix into Phrase/ISL buffers
       const useMl = this.mlReady && this.asl.mode === 'SPELL';

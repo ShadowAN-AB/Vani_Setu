@@ -2,7 +2,6 @@
 Vani-Setu backend: password auth, translation, landmark collection, and ML classify.
 """
 
-import csv
 import json
 import os
 import random
@@ -20,6 +19,7 @@ from threading import Lock
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
+import data as dataset
 from features import landmarks_to_features
 from models_user import User, db, init_db
 from signs import OFFLINE_HI, catalog
@@ -51,8 +51,6 @@ HAND_TASK_URL = (
     "https://storage.googleapis.com/mediapipe-models/hand_landmarker/"
     "hand_landmarker/float16/latest/hand_landmarker.task"
 )
-CSV_PATH = os.path.join(DATA_DIR, "landmarks.csv")
-PHRASE_CSV_PATH = os.path.join(DATA_DIR, "landmarks_phrases.csv")
 TARGET_SAMPLES_PER_LABEL = 25
 
 # Only these files are served from the app folder. Everything else in it
@@ -66,19 +64,6 @@ def _on_paas():
         for k in ("RENDER", "RAILWAY_ENVIRONMENT", "FLY_APP_NAME", "K_SERVICE")
     )
 
-
-def _count_csv_rows(path):
-    if not os.path.exists(path):
-        return 0
-    with open(path, encoding="utf-8") as f:
-        return max(0, sum(1 for _ in f) - 1)
-
-
-def _count_label(path, label):
-    if not os.path.exists(path):
-        return 0
-    with open(path, encoding="utf-8") as f:
-        return sum(1 for row in csv.DictReader(f) if row.get("label") == label)
 
 SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
@@ -423,8 +408,8 @@ def health():
     checks = {
         "server": True,
         "model_loaded": ml_model is not None,
-        "dataset_letters": _count_csv_rows(CSV_PATH),
-        "dataset_phrases": _count_csv_rows(PHRASE_CSV_PATH),
+        "dataset_letters": dataset.counts("letter"),
+        "dataset_phrases": dataset.counts("phrase"),
         "hand_model_file": os.path.exists(os.path.join(APP_DIR, "hand_landmarker.task")),
         "translator": TRANSLATOR_AVAILABLE,
         "email_configured": EMAIL_CONFIGURED,
@@ -440,8 +425,8 @@ def model_status():
         "success": True,
         "model_loaded": ml_model is not None,
         "model_path": os.path.relpath(MODEL_PATH, APP_DIR) if os.path.exists(MODEL_PATH) else None,
-        "samples": _count_csv_rows(CSV_PATH),
-        "phrase_samples": _count_csv_rows(PHRASE_CSV_PATH),
+        "samples": dataset.counts("letter"),
+        "phrase_samples": dataset.counts("phrase"),
         "target_per_label": TARGET_SAMPLES_PER_LABEL,
         "training_enabled": TRAINING_ENABLED,
     })
@@ -449,6 +434,7 @@ def model_status():
 
 @app.route("/api/collect", methods=["POST"])
 def collect_sample():
+    """Save one sample as raw landmarks plus who signed it, which hand, and its split."""
     if not TRAINING_ENABLED:
         return _training_disabled()
     data = request.get_json(silent=True)
@@ -459,28 +445,22 @@ def collect_sample():
     if not label or label == "?":
         return jsonify({"success": False, "message": "Pick a sign label first"}), 400
 
-    # Keep phrase samples out of the letter CSV so Spell ML stays clean
+    # Letters and phrases share one file but are kept apart by "kind",
+    # so phrase samples never leak into the letter model.
     kind = str(data.get("kind") or "letter").strip().lower()
-    if kind not in ("letter", "phrase"):
+    if kind not in dataset.KINDS:
         kind = "letter"
-    path = PHRASE_CSV_PATH if kind == "phrase" else CSV_PATH
 
     try:
-        feats = landmarks_to_features(data["landmarks"])
+        with csv_lock:
+            dataset.append_recording(
+                label, data["landmarks"], kind=kind,
+                signer=data.get("signer", ""), hand=data.get("hand", ""), split=data.get("split", ""),
+            )
+            count = dataset.counts(kind)
+            label_count = dataset.counts(kind, label)
     except ValueError as e:
         return jsonify({"success": False, "message": str(e)}), 400
-
-    os.makedirs(DATA_DIR, exist_ok=True)
-    header = ["label"] + [f"f{i}" for i in range(len(feats))]
-    with csv_lock:
-        new_file = not os.path.exists(path)
-        with open(path, "a", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            if new_file:
-                writer.writerow(header)
-            writer.writerow([label] + feats)
-        count = _count_csv_rows(path)
-        label_count = _count_label(path, label)
 
     return jsonify({
         "success": True,
@@ -488,8 +468,9 @@ def collect_sample():
         "label_count": label_count,
         "label": label,
         "kind": kind,
+        "split": "test" if str(data.get("split", "")).lower() == "test" else "train",
         "target": TARGET_SAMPLES_PER_LABEL,
-        "path": os.path.basename(path),
+        "path": os.path.relpath(dataset.RECORDINGS_CSV, APP_DIR),
     })
 
 
