@@ -2145,6 +2145,13 @@ class App {
       pill.textContent = this.mlReady ? 'ML MODEL' : 'RULES';
       pill.classList.toggle('on', this.mlReady);
       if (data.samples != null) document.getElementById('collectStat').textContent = data.samples + ' samples';
+      // The public host turns recording and retraining off; hide those controls there
+      this.trainingEnabled = data.training_enabled !== false;
+      ['btnRecord', 'btnTrain', 'collectLabel', 'collectHint'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = this.trainingEnabled ? '' : 'none';
+      });
+      if (!this.trainingEnabled) document.getElementById('collectStat').textContent = 'Recording is available when running locally';
     } catch (e) {
       this.mlReady = false;
     }

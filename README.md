@@ -270,3 +270,12 @@ See `Code/dataset/DATASET_SOURCE.md` and `RECORDING_GUIDE.md`.
 - [DEPLOY.md](DEPLOY.md) — guest mode, skip login, Gmail OTP, Postgres
 - [Sign-Language-Interpreter-using-Deep-Learning-master/DOCUMENTATION.md](Sign-Language-Interpreter-using-Deep-Learning-master/DOCUMENTATION.md) — older architecture write-up
 - Original hackathon app (CNN / OpenCV, not the web demo): [Sign-Language-Interpreter-using-Deep-Learning-master/README.md](Sign-Language-Interpreter-using-Deep-Learning-master/README.md)
+
+---
+
+## Credits
+
+- **Starting point:** this repository began from [Sign Language Interpreter using Deep Learning](https://github.com/harshbg/Sign-Language-Interpreter-using-Deep-Learning) by Harsh Gupta (HackUNT-19, 2019, MIT licence), which classified hand images with a Keras CNN. Vani-Setu replaced that pipeline; the original files are kept, unused, in `Sign-Language-Interpreter-using-Deep-Learning-master/legacy/`.
+- **Hand tracking:** [MediaPipe Hand Landmarker](https://developers.google.com/edge/mediapipe/solutions/vision/hand_landmarker) (Google).
+- **Letter dataset:** [ASL Now Fingerspelling Landmarks](https://huggingface.co/datasets/AxelS27/asl-now-fingerspelling) by AxelS27 (MIT licence).
+- **Team:** Abdullah Naseem, Bhanu Satwik, Manoj Kumar K (CSET, Bennett University), guided by Dr. Mohd Anas.

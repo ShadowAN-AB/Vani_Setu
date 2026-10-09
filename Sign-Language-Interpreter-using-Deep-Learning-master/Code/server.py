@@ -55,6 +55,10 @@ CSV_PATH = os.path.join(DATA_DIR, "landmarks.csv")
 PHRASE_CSV_PATH = os.path.join(DATA_DIR, "landmarks_phrases.csv")
 TARGET_SAMPLES_PER_LABEL = 25
 
+# Only these files are served from the app folder. Everything else in it
+# (users.db, .env, datasets, source code) must never be downloadable.
+PUBLIC_FILES = {"index.html", "hand_landmarker.task", "favicon.ico"}
+
 
 def _on_paas():
     return any(
@@ -93,6 +97,11 @@ AUTH_MODE = os.environ.get("AUTH_MODE", "password").strip().lower()
 if AUTH_MODE not in ("password", "otp", "guest", "none"):
     AUTH_MODE = "password"
 EMAIL_CONFIGURED = bool(SMTP_USER and SMTP_PASS)
+
+# Recording samples and retraining change the shared model, so they are on for
+# localhost and off on a public host unless ALLOW_TRAINING=1 is set explicitly.
+_allow = os.environ.get("ALLOW_TRAINING", "").strip().lower()
+TRAINING_ENABLED = (_allow in ("1", "true", "yes")) if _allow else not _on_paas()
 
 OTP_LENGTH = 6
 OTP_EXPIRY_SECONDS = 300
@@ -223,7 +232,16 @@ def index():
 
 @app.route("/<path:filename>")
 def static_files(filename):
+    if filename not in PUBLIC_FILES:
+        return jsonify({"success": False, "message": "Not found"}), 404
     return send_from_directory(APP_DIR, filename)
+
+
+def _training_disabled():
+    return jsonify({
+        "success": False,
+        "message": "Recording and retraining are turned off on this server. Run the app locally to use them.",
+    }), 403
 
 
 @app.route("/api/auth-config", methods=["GET"])
@@ -425,11 +443,14 @@ def model_status():
         "samples": _count_csv_rows(CSV_PATH),
         "phrase_samples": _count_csv_rows(PHRASE_CSV_PATH),
         "target_per_label": TARGET_SAMPLES_PER_LABEL,
+        "training_enabled": TRAINING_ENABLED,
     })
 
 
 @app.route("/api/collect", methods=["POST"])
 def collect_sample():
+    if not TRAINING_ENABLED:
+        return _training_disabled()
     data = request.get_json(silent=True)
     if not data or "label" not in data or "landmarks" not in data:
         return jsonify({"success": False, "message": "label and landmarks are required"}), 400
@@ -475,6 +496,8 @@ def collect_sample():
 @app.route("/api/train", methods=["POST"])
 def train_model():
     """Run train_classifier.py and hot-reload the model, so a demo never needs a terminal."""
+    if not TRAINING_ENABLED:
+        return _training_disabled()
     if not train_lock.acquire(blocking=False):
         return jsonify({"success": False, "message": "Training already in progress"}), 409
 
