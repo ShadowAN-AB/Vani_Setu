@@ -34,10 +34,10 @@ Day to day, run it on **localhost** at `http://127.0.0.1:5001` (`./run.sh`). The
 | **Interface** | HTML5 · CSS3 · vanilla JavaScript · Google Fonts (Fraunces / Sora) |
 | **Vision** | [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker) (21-point Hand Landmarker in the browser) · `getUserMedia` camera |
 | **Backend** | Python 3 · Flask · Flask-CORS · Gunicorn |
-| **Machine learning** | scikit-learn **RBF SVM** (~95.1% held-out A–Z) · joblib · pandas · matplotlib (reports) |
+| **Machine learning** | scikit-learn **RBF SVM** (96.9% test accuracy A–Z, Platt-scaled probabilities) · landmark augmentation · joblib · matplotlib (reports) |
 | **Accounts** | Flask-SQLAlchemy · Werkzeug password hashes · SQLite locally · optional Postgres (`DATABASE_URL`) |
 | **Speech & language** | Web Speech API (speak) · deep-translator / Google Translate · offline Hindi fallback |
-| **Data** | ASL Now fingerspelling landmarks (Hugging Face, MIT) · 63-D wrist-relative features |
+| **Data** | ASL Now fingerspelling landmarks (Hugging Face, MIT) + team recordings · raw 21-point landmarks · 88 features (scaled points, fingertip distances, joint angles) |
 | **Run & ship** | `run.sh` on localhost · Render (HTTPS) · GitHub · python-dotenv |
 
 ```text
@@ -56,7 +56,7 @@ Flask API  ──►  SVM (Spell)  |  pose rules (Phrase / ISL)
 
 | Mode | What happens |
 |------|----------------|
-| **Spell** | Fingerspelling A–Z. An RBF **SVM** classifies 63-D MediaPipe landmarks (~**95.1%** held-out accuracy on 2122 samples). |
+| **Spell** | Fingerspelling A–Z. An RBF **SVM** classifies 88 landmark features (**96.9%** test accuracy, 97.1% ± 1.6% 5-fold CV, and about 97% when the hand is mirrored, tilted or farther away). |
 | **Phrase** | Whole signs such as Hello, Yes, OK. Rule-based finger geometry. |
 | **ISL** | Simplified single-hand classroom signs (Namaste, Thank You, Water, Help, …). Teaching set, not a certified ISL lexicon. |
 | **Practice** | The app prompts a letter and scores your attempts. |
@@ -76,7 +76,7 @@ Also included:
 
 1. You create an account or sign in.
 2. The browser camera + **MediaPipe Hand Landmarker** finds 21 landmarks on one hand. Tracking stays on the device.
-3. Spell mode sends a 63-D feature vector to Flask (`/api/classify`). The SVM returns a letter and a confidence score. A 0.50 floor plus multi-frame voting reduces flicker.
+3. Spell mode sends the 21 landmarks to Flask (`/api/classify`), which computes 88 features and returns the most likely letter, its probability and the top 3. Frames below the confidence threshold picked during training vote “unsure”, and a 14-frame vote reduces flicker.
 4. Phrase / ISL modes match poses with rules unless you record your own phrase samples.
 5. You assemble a sentence, speak it, or translate it.
 
@@ -136,12 +136,12 @@ Double-click `Sign-Language-Interpreter-using-Deep-Learning-master/RUN_VANI_SETU
 
 | File | In git? | What happens |
 |------|---------|----------------|
-| `Code/models/sign_rf.joblib` | Yes | Spell-mode SVM. Present after `git clone`. |
+| `Code/models/sign_svm.joblib` | Yes | Spell-mode SVM bundle (model, feature version, threshold). Present after `git clone`. |
 | `Code/hand_landmarker.task` | No (~7.5 MB) | MediaPipe hand model. The server **downloads it on first run** if missing. |
 
 `users.db` stays local and gitignored. A hosted demo uses guest login so it does not depend on that file.
 
-Keep this project folder for the viva. GitHub now has the letter model; you do not need a USB copy of `sign_rf.joblib`.
+Keep this project folder for the viva. GitHub now has the letter model; you do not need a USB copy of `sign_svm.joblib`.
 
 ---
 
@@ -202,17 +202,18 @@ Hosted deploy notes (Render, HTTPS, guest login): see [DEPLOY.md](DEPLOY.md).
 
 ## Retrain / record
 
-- **Record dataset** in the UI writes landmarks to `Code/dataset/landmarks.csv` (letters) or `landmarks_phrases.csv` (phrases).
+- **Record dataset** in the UI saves raw landmarks with the signer's name to `Code/dataset/recordings/samples.csv` (letters and phrases, kept apart). Tick **Test set** to hold a person's samples out for new-signer testing. Recording and retraining work on localhost only.
 - **Retrain model** in the UI trains the SVM and reloads it without restarting Flask.
 - From a terminal:
 
 ```bash
 cd Sign-Language-Interpreter-using-Deep-Learning-master/Code
-.venv/bin/python train_classifier.py    # train + reports
-.venv/bin/python compare_models.py      # SVM vs RF vs KNN vs tree (for the report)
+.venv/bin/python train_classifier.py    # train + reports (70/15/15 split, augmentation, grid search)
+.venv/bin/python compare_models.py      # six classifiers on the same data
+.venv/bin/python evaluate.py            # before/after, CV, learning + validation curves, PCA/t-SNE, speed
 ```
 
-Reports land in `Code/reports/` (confusion matrix, accuracy, model comparison).
+Reports land in `Code/reports/`: `metrics.json`, `evaluation.md`, `model_comparison.md` and the figures.
 
 ---
 
@@ -232,14 +233,20 @@ Vani-Setu/
         ├── index.html                 ← UI + MediaPipe
         ├── server.py                  ← Flask APIs
         ├── models_user.py             ← User table (SQLite / Postgres)
-        ├── features.py                ← 63-D landmark features
+        ├── data.py                    ← raw landmark storage (dataset + recordings)
+        ├── features.py                ← 88 landmark features (v2), 63 (v1)
+        ├── augment.py                 ← mirror / rotate / jitter augmentation
+        ├── build_dataset.py           ← ASL Now JSON → asl_now_landmarks.csv
         ├── signs.py                   ← phrase / ISL rules + Hindi fallback
         ├── train_classifier.py        ← SVM trainer
         ├── compare_models.py          ← classifier benchmark
+        ├── evaluate.py                ← evaluation report
         ├── requirements_web.txt
         ├── .env.example
-        ├── dataset/                   ← landmarks + recording guides
-        └── models/sign_rf.joblib      ← trained letter SVM (in git)
+        ├── dataset/                   ← asl_now_landmarks.csv, recordings/, guides
+        ├── reports/                   ← metrics, evaluation, figures
+        └── models/sign_svm.joblib     ← trained letter SVM (in git)
+    └── legacy/                        ← original HackUNT-19 CNN code (unused, credited)
 ```
 
 ---
@@ -247,7 +254,7 @@ Vani-Setu/
 ## Dataset
 
 Spell-mode letters come from **ASL Now Fingerspelling** landmarks  
-([AxelS27/asl-now-fingerspelling](https://huggingface.co/datasets/AxelS27/asl-now-fingerspelling), MIT), converted to the same 63-D features the live app uses.
+([AxelS27/asl-now-fingerspelling](https://huggingface.co/datasets/AxelS27/asl-now-fingerspelling), MIT), stored as raw landmarks in `Code/dataset/asl_now_landmarks.csv` (2,122 samples, 26 letters).
 
 See `Code/dataset/DATASET_SOURCE.md` and `RECORDING_GUIDE.md`.
 

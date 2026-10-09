@@ -1837,9 +1837,9 @@ class App {
     this.fpsFrames = 0; this.fpsLast = performance.now(); this.fpsVal = 0;
     this.mlReady = false; this.collecting = false; this.collectEvery = 0;
     this.lastLm = null; this.catalog = null;
-    this._mlBusy = false; this._mlLabel = null; this._mlConf = 0;
-    // SVM probabilities are calibrated: 0.50 keeps ~96% of correct predictions
-    // while rejecting ~69% of errors. Frame voting filters what gets through.
+    this._mlBusy = false; this._mlLabel = null; this._mlConf = 0; this._mlTop = null; this._mlMs = 0;
+    // Frames below this confidence vote '?' instead of a letter. The trainer picks it on
+    // the validation set and the server sends it with /api/model-status (0.50 is a fallback).
     this.ML_MIN_CONF = 0.50;
     this.quiz = null;
   }
@@ -1989,12 +1989,12 @@ class App {
     const useMl = this.mlReady && this.asl.mode === 'SPELL';
     if (!useMl) { row.style.display = 'none'; return; }
     row.style.display = 'flex';
-    const pct = handVisible && this._mlLabel ? Math.round(this._mlConf * 100) : 0;
+    const pct = handVisible && this._mlTop ? Math.round(this._mlConf * 100) : 0;
     const fill = document.getElementById('confFill');
     fill.style.width = pct + '%';
     fill.className = 'conf-fill' + (pct >= 60 ? ' high' : pct >= 30 ? ' mid' : '');
     document.getElementById('confVal').textContent =
-      pct && this._mlLabel ? `${this._mlLabel} ${pct}%` : '--';
+      pct && this._mlTop ? `${this._mlTop} ${pct}%` + (this._mlConf < this.ML_MIN_CONF ? ' (unsure)' : '') : '--';
   }
 
   // ---- Spell autocomplete ----
@@ -2154,6 +2154,7 @@ class App {
       const res = await fetch('/api/model-status');
       const data = await res.json();
       this.mlReady = !!(data.success && data.model_loaded);
+      if (data.threshold) this.ML_MIN_CONF = Number(data.threshold);
       const pill = document.getElementById('modelPill');
       pill.textContent = this.mlReady ? 'ML MODEL' : 'RULES';
       pill.classList.toggle('on', this.mlReady);
@@ -2217,6 +2218,7 @@ class App {
   }
 
   async classifyMl(lm) {
+    const t0 = performance.now();
     try {
       const res = await fetch('/api/classify', {
         method: 'POST',
@@ -2224,11 +2226,13 @@ class App {
         body: JSON.stringify({ landmarks: lm })
       });
       const data = await res.json();
+      // Smoothed round-trip time (browser -> Flask -> browser), shown next to FPS
+      const ms = performance.now() - t0;
+      this._mlMs = this._mlMs ? this._mlMs * 0.8 + ms * 0.2 : ms;
       if (!data.success || !data.label) return null;
       const conf = data.confidence == null ? 1 : Number(data.confidence);
-      // Accept mid-confidence RF votes; reject only very unsure ones
-      if (conf >= this.ML_MIN_CONF) return { label: data.label, confidence: conf };
-    } catch (e) { /* fall back to rules */ }
+      return { label: data.label, confidence: conf, accepted: conf >= this.ML_MIN_CONF };
+    } catch (e) { /* network hiccup: keep the last result */ }
     return null;
   }
 
@@ -2280,7 +2284,9 @@ class App {
         this._mlBusy = true;
         this.classifyMl(lm).then(result => {
           if (result) {
-            this._mlLabel = result.label;
+            // An unsure frame votes '?', so it can never push a wrong letter into the sentence
+            this._mlLabel = result.accepted ? result.label : '?';
+            this._mlTop = result.label;
             this._mlConf = result.confidence;
           }
         }).finally(() => { this._mlBusy = false; });
@@ -2290,6 +2296,7 @@ class App {
     } else {
       this.asl.reset();
       this._mlLabel = null;
+      this._mlTop = null;
       this._mlConf = 0;
     }
 
@@ -2376,7 +2383,8 @@ class App {
     document.getElementById('stSigns').textContent = this.signs;
     document.getElementById('stWords').textContent = this.words;
     document.getElementById('stSent').textContent = this.sents;
-    document.getElementById('fpsBadge').textContent = this.fpsVal + ' FPS';
+    document.getElementById('fpsBadge').textContent = this.fpsVal + ' FPS'
+      + (this.mlReady && this.asl.mode === 'SPELL' && this._mlMs ? ` · ${Math.round(this._mlMs)} ms` : '');
     this.renderConfidence(ok);
     this.renderSuggestions();
 

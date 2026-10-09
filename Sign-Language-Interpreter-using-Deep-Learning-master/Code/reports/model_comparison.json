@@ -1,0 +1,67 @@
+{
+  "setup": {
+    "feature_version": 2,
+    "n_features": 88,
+    "augmented": true,
+    "train": 1484,
+    "train_after_augmentation": 8904,
+    "validation": 319,
+    "test": 319
+  },
+  "results": [
+    {
+      "model": "SVM (RBF)",
+      "val_accuracy": 0.9687,
+      "val_macro_f1": 0.971,
+      "test_accuracy": 0.9718,
+      "test_macro_f1": 0.9752,
+      "fit_seconds": 0.76,
+      "ms_per_prediction": 0.654
+    },
+    {
+      "model": "Logistic Regression",
+      "val_accuracy": 0.9561,
+      "val_macro_f1": 0.9591,
+      "test_accuracy": 0.9592,
+      "test_macro_f1": 0.9652,
+      "fit_seconds": 2.01,
+      "ms_per_prediction": 0.711
+    },
+    {
+      "model": "Random Forest",
+      "val_accuracy": 0.9561,
+      "val_macro_f1": 0.9591,
+      "test_accuracy": 0.9624,
+      "test_macro_f1": 0.9633,
+      "fit_seconds": 6.18,
+      "ms_per_prediction": 51.155
+    },
+    {
+      "model": "MLP neural network",
+      "val_accuracy": 0.9592,
+      "val_macro_f1": 0.9582,
+      "test_accuracy": 0.9624,
+      "test_macro_f1": 0.9627,
+      "fit_seconds": 4.02,
+      "ms_per_prediction": 0.453
+    },
+    {
+      "model": "K-Nearest Neighbours",
+      "val_accuracy": 0.9436,
+      "val_macro_f1": 0.9446,
+      "test_accuracy": 0.9498,
+      "test_macro_f1": 0.9535,
+      "fit_seconds": 0.01,
+      "ms_per_prediction": 0.979
+    },
+    {
+      "model": "Decision Tree",
+      "val_accuracy": 0.9091,
+      "val_macro_f1": 0.9162,
+      "test_accuracy": 0.9091,
+      "test_macro_f1": 0.9151,
+      "fit_seconds": 0.83,
+      "ms_per_prediction": 0.127
+    }
+  ]
+}

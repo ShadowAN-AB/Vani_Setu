@@ -1,0 +1,134 @@
+{
+  "split": {
+    "train": 1484,
+    "validation": 319,
+    "test": 319,
+    "new_signer_test": 0
+  },
+  "before_after": {
+    "Original (63 features, no augmentation)": {
+      "Original": 0.9279,
+      "Other hand (mirrored)": 0.6426,
+      "Tilted 15\u00b0": 0.7837,
+      "Hand 40% smaller": 0.721
+    },
+    "63 features + augmentation": {
+      "Original": 0.9404,
+      "Other hand (mirrored)": 0.9436,
+      "Tilted 15\u00b0": 0.9342,
+      "Hand 40% smaller": 0.8245
+    },
+    "88 features, no augmentation": {
+      "Original": 0.9561,
+      "Other hand (mirrored)": 0.8401,
+      "Tilted 15\u00b0": 0.931,
+      "Hand 40% smaller": 0.9561
+    },
+    "New (88 features + augmentation)": {
+      "Original": 0.9718,
+      "Other hand (mirrored)": 0.9718,
+      "Tilted 15\u00b0": 0.9687,
+      "Hand 40% smaller": 0.9718
+    }
+  },
+  "cross_validation": {
+    "folds": [
+      0.9861,
+      0.9806,
+      0.9834,
+      0.9528,
+      0.95
+    ],
+    "mean": 0.9706,
+    "std": 0.0158
+  },
+  "learning_curve": [
+    {
+      "train_samples": 148,
+      "train_accuracy": 1.0,
+      "val_accuracy": 0.837
+    },
+    {
+      "train_samples": 296,
+      "train_accuracy": 0.9966,
+      "val_accuracy": 0.9248
+    },
+    {
+      "train_samples": 593,
+      "train_accuracy": 1.0,
+      "val_accuracy": 0.9373
+    },
+    {
+      "train_samples": 890,
+      "train_accuracy": 1.0,
+      "val_accuracy": 0.9624
+    },
+    {
+      "train_samples": 1187,
+      "train_accuracy": 0.9983,
+      "val_accuracy": 0.9655
+    },
+    {
+      "train_samples": 1484,
+      "train_accuracy": 0.998,
+      "val_accuracy": 0.9655
+    }
+  ],
+  "validation_curve": [
+    {
+      "C": 0.03,
+      "train_accuracy": 0.8423,
+      "val_accuracy": 0.8276
+    },
+    {
+      "C": 0.1,
+      "train_accuracy": 0.9111,
+      "val_accuracy": 0.8966
+    },
+    {
+      "C": 0.3,
+      "train_accuracy": 0.9575,
+      "val_accuracy": 0.9436
+    },
+    {
+      "C": 1,
+      "train_accuracy": 0.9838,
+      "val_accuracy": 0.9624
+    },
+    {
+      "C": 3,
+      "train_accuracy": 0.9933,
+      "val_accuracy": 0.9687
+    },
+    {
+      "C": 10,
+      "train_accuracy": 0.9973,
+      "val_accuracy": 0.9687
+    },
+    {
+      "C": 30,
+      "train_accuracy": 0.9993,
+      "val_accuracy": 0.9687
+    },
+    {
+      "C": 100,
+      "train_accuracy": 0.9993,
+      "val_accuracy": 0.9687
+    },
+    {
+      "C": 300,
+      "train_accuracy": 1.0,
+      "val_accuracy": 0.9687
+    }
+  ],
+  "pca_explained_variance": [
+    0.3728,
+    0.1697
+  ],
+  "speed_ms": {
+    "features": 0.343,
+    "features_and_classify": 1.083,
+    "support_vectors": 2684
+  },
+  "new_signers": null
+}

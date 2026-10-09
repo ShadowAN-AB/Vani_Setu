@@ -45,7 +45,9 @@ except ImportError:
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(APP_DIR, "dataset")
-MODEL_PATH = os.path.join(APP_DIR, "models", "sign_rf.joblib")
+MODEL_PATH = os.path.join(APP_DIR, "models", "sign_svm.joblib")
+LEGACY_MODEL_PATH = os.path.join(APP_DIR, "models", "sign_rf.joblib")  # pre-v2 file name
+DEFAULT_THRESHOLD = 0.50
 HAND_TASK_PATH = os.path.join(APP_DIR, "hand_landmarker.task")
 HAND_TASK_URL = (
     "https://storage.googleapis.com/mediapipe-models/hand_landmarker/"
@@ -110,7 +112,8 @@ cache_lock = Lock()
 csv_lock = Lock()
 train_lock = Lock()
 MAX_CACHE_SIZE = 500
-ml_model = None
+ml_model = None       # the classifier (has predict_proba and classes_)
+ml_info = {}          # feature version, threshold and headline metrics saved by the trainer
 
 
 def ensure_hand_landmarker():
@@ -131,15 +134,29 @@ def ensure_hand_landmarker():
 
 
 def load_ml_model():
-    global ml_model
-    if not JOBLIB_OK or not os.path.exists(MODEL_PATH):
-        ml_model = None
+    """Load the trainer's bundle; an old bare pipeline still works with version-1 features."""
+    global ml_model, ml_info
+    path = MODEL_PATH if os.path.exists(MODEL_PATH) else LEGACY_MODEL_PATH
+    if not JOBLIB_OK or not os.path.exists(path):
+        ml_model, ml_info = None, {}
         return
     try:
-        ml_model = joblib.load(MODEL_PATH)
-        print(f"  [OK] Loaded classifier: {MODEL_PATH}")
+        obj = joblib.load(path)
+        if isinstance(obj, dict) and "model" in obj:
+            ml_model = obj["model"]
+            ml_info = {
+                "path": os.path.relpath(path, APP_DIR),
+                "feature_version": int(obj.get("feature_version", 1)),
+                "threshold": float(obj.get("threshold", DEFAULT_THRESHOLD)),
+                "metrics": obj.get("metrics", {}),
+            }
+        else:
+            ml_model = obj
+            ml_info = {"path": os.path.relpath(path, APP_DIR), "feature_version": 1,
+                       "threshold": DEFAULT_THRESHOLD, "metrics": {}}
+        print(f"  [OK] Loaded classifier: {ml_info['path']} (features v{ml_info['feature_version']})")
     except Exception as e:
-        ml_model = None
+        ml_model, ml_info = None, {}
         print(f"  [WARN] Could not load model: {e}")
 
 
@@ -424,7 +441,10 @@ def model_status():
     return jsonify({
         "success": True,
         "model_loaded": ml_model is not None,
-        "model_path": os.path.relpath(MODEL_PATH, APP_DIR) if os.path.exists(MODEL_PATH) else None,
+        "model_path": ml_info.get("path"),
+        "feature_version": ml_info.get("feature_version"),
+        "threshold": ml_info.get("threshold", DEFAULT_THRESHOLD),
+        "test_accuracy": (ml_info.get("metrics") or {}).get("accuracy"),
         "samples": dataset.counts("letter"),
         "phrase_samples": dataset.counts("phrase"),
         "target_per_label": TARGET_SAMPLES_PER_LABEL,
@@ -530,20 +550,27 @@ def classify_landmarks():
     if not data or "landmarks" not in data:
         return jsonify({"success": False, "message": "landmarks required"}), 400
 
+    start = time.perf_counter()
     try:
-        feats = landmarks_to_features(data["landmarks"])
+        feats = landmarks_to_features(data["landmarks"], ml_info.get("feature_version", 1))
     except ValueError as e:
         return jsonify({"success": False, "message": str(e)}), 400
 
     try:
-        pred = ml_model.predict([feats])[0]
-        proba = None
-        if hasattr(ml_model, "predict_proba"):
-            probs = ml_model.predict_proba([feats])[0]
-            classes = list(ml_model.classes_)
-            idx = classes.index(pred)
-            proba = float(probs[idx])
-        return jsonify({"success": True, "label": str(pred), "confidence": proba})
+        # The letter always comes from the highest probability, so the label and
+        # the confidence shown in the app can never disagree.
+        probs = ml_model.predict_proba([feats])[0]
+        classes = [str(c) for c in ml_model.classes_]
+        order = sorted(range(len(classes)), key=lambda i: -probs[i])
+        top = [{"label": classes[i], "confidence": round(float(probs[i]), 4)} for i in order[:3]]
+        return jsonify({
+            "success": True,
+            "label": top[0]["label"],
+            "confidence": top[0]["confidence"],
+            "top": top,
+            "threshold": ml_info.get("threshold", DEFAULT_THRESHOLD),
+            "server_ms": round((time.perf_counter() - start) * 1000, 2),
+        })
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 

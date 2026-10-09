@@ -1,0 +1,116 @@
+{
+  "accuracy": 0.9687,
+  "n_samples": 2122,
+  "n_classes": 26,
+  "model": "StandardScaler + SVC(rbf, C=3, gamma=scale, class_weight=balanced), Platt-scaled probabilities",
+  "feature_version": 2,
+  "n_features": 88,
+  "augmented": true,
+  "split": {
+    "train": 1484,
+    "train_after_augmentation": 8904,
+    "validation": 319,
+    "test": 319,
+    "new_signer_test": 0
+  },
+  "best_params": {
+    "C": 3,
+    "gamma": "scale"
+  },
+  "validation": {
+    "n": 319,
+    "accuracy": 0.9687,
+    "macro_f1": 0.9706
+  },
+  "test": {
+    "n": 319,
+    "accuracy": 0.9687,
+    "macro_f1": 0.9724
+  },
+  "robustness_test_accuracy": {
+    "original": 0.9687,
+    "mirrored (other hand)": 0.9687,
+    "tilted +15 degrees": 0.9624,
+    "tilted -15 degrees": 0.9467,
+    "hand 40% smaller (farther away)": 0.9687
+  },
+  "new_signer_test": null,
+  "confidence_threshold": {
+    "threshold": 0.7,
+    "kept_correct": 0.9806,
+    "rejected_errors": 0.3
+  },
+  "top_confusions": [
+    {
+      "actual": "Z",
+      "predicted": "X",
+      "count": 1
+    },
+    {
+      "actual": "Z",
+      "predicted": "J",
+      "count": 1
+    },
+    {
+      "actual": "U",
+      "predicted": "V",
+      "count": 1
+    },
+    {
+      "actual": "U",
+      "predicted": "R",
+      "count": 1
+    },
+    {
+      "actual": "S",
+      "predicted": "M",
+      "count": 1
+    },
+    {
+      "actual": "R",
+      "predicted": "D",
+      "count": 1
+    },
+    {
+      "actual": "P",
+      "predicted": "J",
+      "count": 1
+    },
+    {
+      "actual": "O",
+      "predicted": "M",
+      "count": 1
+    }
+  ],
+  "latency_ms_per_frame": 1.257,
+  "fit_seconds": 4.74,
+  "per_class_counts": {
+    "A": 65,
+    "B": 69,
+    "C": 53,
+    "D": 72,
+    "E": 57,
+    "F": 61,
+    "G": 95,
+    "H": 69,
+    "I": 68,
+    "J": 93,
+    "K": 64,
+    "L": 84,
+    "M": 88,
+    "N": 84,
+    "O": 98,
+    "P": 72,
+    "Q": 97,
+    "R": 75,
+    "S": 83,
+    "T": 68,
+    "U": 106,
+    "V": 83,
+    "W": 75,
+    "X": 106,
+    "Y": 82,
+    "Z": 155
+  },
+  "trained_at": "2026-10-09T16:18:59+00:00"
+}
