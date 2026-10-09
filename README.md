@@ -14,6 +14,8 @@
   <img src="https://img.shields.io/badge/Flask-API-000000?style=flat-square&logo=flask&logoColor=white" alt="Flask">
   <img src="https://img.shields.io/badge/MediaPipe-Hand_Landmarker-009688?style=flat-square&logo=google&logoColor=white" alt="MediaPipe">
   <img src="https://img.shields.io/badge/scikit--learn-SVM_RBF-F7931E?style=flat-square&logo=scikitlearn&logoColor=white" alt="scikit-learn">
+  <img src="https://img.shields.io/badge/Keras-MLP-D00000?style=flat-square&logo=keras&logoColor=white" alt="Keras">
+  <img src="https://img.shields.io/badge/Letters-96.9%25_test-0b5f66?style=flat-square" alt="96.9% test accuracy">
   <img src="https://img.shields.io/badge/SQLite-accounts-003B57?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite">
   <img src="https://img.shields.io/badge/Render-HTTPS-46E3B7?style=flat-square&logo=render&logoColor=black" alt="Render">
 </p>
@@ -21,9 +23,50 @@
 **Live app:** [https://vani-setu.onrender.com](https://vani-setu.onrender.com)  
 Open the link → **Continue as guest** → **Start camera** (allow the webcam). The Free Render instance sleeps after idle time; the first load can take about a minute.
 
-A laptop camera tracks one hand in the browser. The app turns poses into letters or short phrases, builds a sentence, can speak it, and can translate it into 25+ languages.
+A laptop camera tracks one or two hands in the browser. Machine learning turns them into fingerspelled letters or whole signs, the app builds a sentence (with word prediction that can fix a misread letter), speaks it, and translates it into 25+ languages.
 
 Day to day, run it on **localhost** at `http://127.0.0.1:5001` (`./run.sh`). The public URL is the same product over HTTPS.
+
+---
+
+## What's new (October 2026)
+
+| Area | Change |
+|------|--------|
+| **Letter model** | 88 features instead of 63 (palm-length scaling, 10 fingertip distances, 15 joint angles); training data augmented with mirrored, tilted and jittered copies; 70 / 15 / 15 split with C and γ tuned on validation. **96.9%** test accuracy, **97.1% ± 1.6%** cross-validation. |
+| **Robustness** | With the other hand the old model fell to 64.3%; the new one scores 97.2%. Tilted 15°: 78.4% → 96.9%. Hand farther away: 72.1% → 97.2%. |
+| **Neural networks** | Keras MLP (Dense 128 → 64, ReLU, dropout, softmax) for letters, ASL phrases and ISL signs. Weights are exported and run with NumPy, so the server needs no TensorFlow. |
+| **Two hands** | MediaPipe tracks two hands; phrase and ISL samples keep both, with their Left / Right label (181 features). |
+| **Word prediction** | Noisy-channel model: word frequency × how often the classifier confuses letters, so X-E-D still suggests RED. |
+| **Data** | Every sample is stored as raw landmarks with the signer's name, hand and a **Test set** flag for new-signer testing. |
+| **Evaluation** | `evaluate.py`: before/after, cross-validation, learning and validation curves, PCA / t-SNE, speed. `compare_models.py`: six models on identical data. |
+| **App** | Holding a sign types it once; unsure frames are ignored; the label always matches its confidence; FPS badge shows response time. |
+| **Security** | The server only serves the web page and hand model (before, `users.db` and `.env` could be downloaded). Recording and retraining are local only. |
+| **Clean-up** | Original hackathon CNN code moved to `legacy/` and credited. |
+
+---
+
+## Results
+
+All on the same held-out test set (319 samples, 26 letters). Full report: [`reports/evaluation.md`](Sign-Language-Interpreter-using-Deep-Learning-master/Code/reports/evaluation.md).
+
+| Test condition | First version (63 features) | Current (88 features + augmentation) |
+|----------------|-----------------------------|--------------------------------------|
+| Normal | 92.8% | 97.2% |
+| Other hand (mirrored) | 64.3% | 97.2% |
+| Tilted 15° | 78.4% | 96.9% |
+| Hand 40% smaller (farther away) | 72.1% | 97.2% |
+
+![Before and after](Sign-Language-Interpreter-using-Deep-Learning-master/Code/reports/eval_before_after.png)
+
+| Model (same data and features) | Test accuracy |
+|--------------------------------|---------------|
+| **SVM, RBF kernel** (used for letters) | **97.2%** (tuned live model: 96.9%) |
+| MLP neural network | 96.2% (Keras version: 95.9%) |
+| Random Forest | 96.2% |
+| Logistic Regression | 95.9% |
+| K-Nearest Neighbours | 95.0% |
+| Decision Tree | 90.9% |
 
 ---
 
@@ -34,18 +77,19 @@ Day to day, run it on **localhost** at `http://127.0.0.1:5001` (`./run.sh`). The
 | **Interface** | HTML5 · CSS3 · vanilla JavaScript · Google Fonts (Fraunces / Sora) |
 | **Vision** | [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker) (21-point Hand Landmarker in the browser) · `getUserMedia` camera |
 | **Backend** | Python 3 · Flask · Flask-CORS · Gunicorn |
-| **Machine learning** | scikit-learn **RBF SVM** (96.9% test accuracy A–Z, Platt-scaled probabilities) · landmark augmentation · joblib · matplotlib (reports) |
+| **Machine learning** | scikit-learn **RBF SVM** for letters (96.9% test, Platt-scaled probabilities) · **Keras MLP** for phrases / ISL, run with NumPy · landmark augmentation · noisy-channel word prediction · matplotlib reports |
 | **Accounts** | Flask-SQLAlchemy · Werkzeug password hashes · SQLite locally · optional Postgres (`DATABASE_URL`) |
 | **Speech & language** | Web Speech API (speak) · deep-translator / Google Translate · offline Hindi fallback |
 | **Data** | ASL Now fingerspelling landmarks (Hugging Face, MIT) + team recordings · raw 21-point landmarks · 88 features (scaled points, fingertip distances, joint angles) |
 | **Run & ship** | `run.sh` on localhost · Render (HTTPS) · GitHub · python-dotenv |
 
 ```text
-Browser (HTML / CSS / JS + MediaPipe)
-        │  camera landmarks
+Browser (HTML / CSS / JS + MediaPipe, up to 2 hands)
+        │  21 landmarks per hand (never video)
         ▼
-Flask API  ──►  SVM (Spell)  |  pose rules (Phrase / ISL)
-        │
+Flask API ──► SVM, 88 features (Spell)
+        │ ──► MLP, 181 features (Phrase / ISL, once trained; rules until then)
+        │ ──► word prediction (/api/suggest)
         ├── SQLite / Postgres   (login)
         └── Translate + Speak
 ```
