@@ -514,6 +514,11 @@
       padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line);
       background: var(--surface); color: var(--ink); font-size: 12px; font-weight: 600;
     }
+    .collect-bar input[type=text] {
+      width: 120px; padding: 8px 10px; font-size: 12px; border-radius: 8px;
+      border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+    }
+    .collect-bar label.test-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
     .collect-bar button.rec-on {
       border-color: #efb4af; color: var(--danger); background: var(--danger-soft);
     }
@@ -647,6 +652,7 @@
       font-family: var(--font); cursor: pointer;
       transition: transform 0.15s, background 0.2s;
     }
+    .suggest-chip.corrected { border-style: dashed; }
     .suggest-chip:hover { background: #c8e4e7; transform: translateY(-1px); }
     .suggest-empty { font-size: 12px; color: var(--muted); }
 
@@ -824,7 +830,7 @@
         <div class="brand-meta">
           <span>Camera-local</span>
           <span>Password login</span>
-          <span>25+ languages</span>
+          <span>English + Hindi</span>
         </div>
       </section>
 
@@ -960,6 +966,10 @@
             </div>
             <div class="collect-bar">
               <select id="collectLabel"></select>
+              <input type="text" id="collectSigner" placeholder="Signer name" maxlength="40" aria-label="Signer name">
+              <label class="test-toggle" title="Keep these samples out of training and use them to test the model on a new person">
+                <input type="checkbox" id="collectTest"> Test set
+              </label>
               <button id="btnRecord">Record dataset</button>
               <button id="btnTrain">Retrain model</button>
               <span id="collectStat" style="font-size:11px;color:var(--muted);">0 samples</span>
@@ -974,14 +984,6 @@
           <div class="lang-tab" style="color:var(--muted);font-size:11px;letter-spacing:0.08em;">OUTPUT</div>
           <div class="lang-tab active" data-lang="en">English</div>
           <div class="lang-tab" data-lang="hi">Hindi</div>
-          <div class="lang-tab" data-lang="fr">French</div>
-          <div class="lang-tab" data-lang="es">Spanish</div>
-          <div class="lang-tab" data-lang="de">German</div>
-          <div class="lang-tab" data-lang="ja">Japanese</div>
-          <button class="lang-more-btn" id="langMoreBtn">More</button>
-        </div>
-        <div class="lang-dropdown" id="langDropdown">
-          <input class="lang-dropdown-search" id="langSearch" placeholder="Search languages..." type="text">
         </div>
 
         <div class="trans-pane">
@@ -1073,13 +1075,15 @@
     <div class="about-wrap">
       <div class="about-card">
         <h2>About Vani-Setu</h2>
-        <p>Vani-Setu (“voice-bridge”) is a camera-based sign language translator for classroom and accessibility demos. It tracks one hand with MediaPipe, maps poses to words or letters, speaks the result, and can translate English into Hindi and other languages.</p>
+        <p>Vani-Setu (“voice-bridge”) is a camera-based sign language translator for classroom and accessibility demos. It tracks one or two hands with MediaPipe, recognises letters and signs with machine learning, speaks the result, and shows the sentence in English and Hindi.</p>
       </div>
       <div class="about-card">
         <h2>College iteration</h2>
         <ul>
-          <li>Working <b>Indian Sign Language (ISL)</b> input mode — simplified single-hand classroom signs.</li>
-          <li>A <b>landmark dataset recorder</b> and Random Forest trainer with a confusion matrix for the report.</li>
+          <li>Letters A–Z with an <b>SVM</b> on 88 hand features (96.9% test accuracy), robust to the other hand and a tilted or distant hand.</li>
+          <li>A <b>neural network</b> (MLP) for ASL phrases and <b>Indian Sign Language (ISL)</b> signs once you record samples; rules until then.</li>
+          <li>Word prediction that can fix a misread letter, and a <b>Dictionary</b> showing how to make every sign.</li>
+          <li>A <b>landmark dataset recorder</b> with signer names and a test-set option, and retraining from the browser.</li>
           <li>Offline Hindi fallback when Google Translate is unavailable.</li>
           <li>SMTP secrets moved to <code>.env</code>. OTP prints in the terminal when email is not set.</li>
         </ul>
@@ -1087,8 +1091,8 @@
       <div class="about-card">
         <h2>Honest limits</h2>
         <ul>
-          <li>One hand, static poses only (no motion letters J/Z, no two-handed ISL).</li>
-          <li>Rule-based poses until you record samples and run <code>train_classifier.py</code>.</li>
+          <li>Single frames only, so the motion letters J and Z are only partly recognised.</li>
+          <li>Phrase and ISL modes use rules until you record samples and retrain.</li>
           <li>ISL here is a teaching approximation, not a certified ISL lexicon.</li>
         </ul>
       </div>
@@ -1115,32 +1119,10 @@ import { HandLandmarker, FilesetResolver }
 // ==============================
 // LANGUAGE CONFIG
 // ==============================
+// Output languages: the sentence is shown in English and can be translated into Hindi
 const LANGUAGES = [
-  { code: 'en',    name: 'English',              flag: '🇺🇸' },
-  { code: 'hi',    name: 'Hindi',                flag: '🇮🇳' },
-  { code: 'fr',    name: 'French',               flag: '🇫🇷' },
-  { code: 'es',    name: 'Spanish',              flag: '🇪🇸' },
-  { code: 'de',    name: 'German',               flag: '🇩🇪' },
-  { code: 'ja',    name: 'Japanese',             flag: '🇯🇵' },
-  { code: 'ar',    name: 'Arabic',               flag: '🇸🇦' },
-  { code: 'bn',    name: 'Bengali',              flag: '🇧🇩' },
-  { code: 'ta',    name: 'Tamil',                flag: '🇮🇳' },
-  { code: 'ko',    name: 'Korean',               flag: '🇰🇷' },
-  { code: 'pt',    name: 'Portuguese',           flag: '🇧🇷' },
-  { code: 'ru',    name: 'Russian',              flag: '🇷🇺' },
-  { code: 'zh-CN', name: 'Chinese (Simplified)', flag: '🇨🇳' },
-  { code: 'ur',    name: 'Urdu',                 flag: '🇵🇰' },
-  { code: 'mr',    name: 'Marathi',              flag: '🇮🇳' },
-  { code: 'te',    name: 'Telugu',               flag: '🇮🇳' },
-  { code: 'gu',    name: 'Gujarati',             flag: '🇮🇳' },
-  { code: 'kn',    name: 'Kannada',              flag: '🇮🇳' },
-  { code: 'ml',    name: 'Malayalam',             flag: '🇮🇳' },
-  { code: 'pa',    name: 'Punjabi',              flag: '🇮🇳' },
-  { code: 'or',    name: 'Odia',                 flag: '🇮🇳' },
-  { code: 'it',    name: 'Italian',              flag: '🇮🇹' },
-  { code: 'tr',    name: 'Turkish',              flag: '🇹🇷' },
-  { code: 'th',    name: 'Thai',                 flag: '🇹🇭' },
-  { code: 'vi',    name: 'Vietnamese',           flag: '🇻🇳' },
+  { code: 'en', name: 'English', flag: '🇬🇧' },
+  { code: 'hi', name: 'Hindi',   flag: '🇮🇳' },
 ];
 
 // ==============================
@@ -1512,56 +1494,6 @@ class TranslationController {
       tab.addEventListener('click', () => this.selectLang(tab.dataset.lang));
     });
 
-    // Populate dropdown with all languages
-    this.populateDropdown();
-
-    // "More" button
-    document.getElementById('langMoreBtn').addEventListener('click', (e) => {
-      e.stopPropagation();
-      document.getElementById('langDropdown').classList.toggle('show');
-      setTimeout(() => document.getElementById('langSearch').focus(), 100);
-    });
-
-    // Close dropdown on outside click
-    document.addEventListener('click', (e) => {
-      if (!document.getElementById('langDropdown').contains(e.target) &&
-          e.target.id !== 'langMoreBtn') {
-        document.getElementById('langDropdown').classList.remove('show');
-      }
-    });
-
-    // Search filter
-    document.getElementById('langSearch').addEventListener('input', (e) => {
-      this.filterDropdown(e.target.value);
-    });
-  }
-
-  populateDropdown() {
-    const dropdown = document.getElementById('langDropdown');
-    const searchInput = dropdown.querySelector('.lang-dropdown-search');
-
-    LANGUAGES.forEach(lang => {
-      const item = document.createElement('button');
-      item.className = 'lang-dropdown-item' + (lang.code === this.currentLang ? ' active' : '');
-      item.dataset.lang = lang.code;
-      item.innerHTML = `<span class="lang-flag">${lang.flag}</span> ${lang.name}`;
-      item.addEventListener('click', () => {
-        this.selectLang(lang.code);
-        dropdown.classList.remove('show');
-        document.getElementById('langSearch').value = '';
-        this.filterDropdown('');
-      });
-      dropdown.appendChild(item);
-    });
-  }
-
-  filterDropdown(query) {
-    const items = document.querySelectorAll('.lang-dropdown-item');
-    const q = query.toLowerCase();
-    items.forEach(item => {
-      const name = item.textContent.toLowerCase();
-      item.style.display = name.includes(q) ? '' : 'none';
-    });
   }
 
   selectLang(code) {
@@ -1572,11 +1504,6 @@ class TranslationController {
     // Update tab active states
     document.querySelectorAll('#outputLangRow .lang-tab[data-lang]').forEach(tab => {
       tab.classList.toggle('active', tab.dataset.lang === code);
-    });
-
-    // Update dropdown active states
-    document.querySelectorAll('.lang-dropdown-item').forEach(item => {
-      item.classList.toggle('active', item.dataset.lang === code);
     });
 
     // Update output badge
@@ -1712,6 +1639,9 @@ class ASL {
     this.mode = 'PHRASE'; this.lang = 'ASL'; this.buf = []; this.mx = 14; this.thr = 9;
     this.cd = 0; this.cdm = 22; this.disp = '?';
     this.fg = [false, false, false, false, false];
+    // Holding one sign types it once: the same sign is accepted again only after the
+    // hand shows something else, becomes unsure, or leaves the frame.
+    this.lastCommit = null; this.released = true;
   }
   setLang(lang) { this.lang = lang === 'ISL' ? 'ISL' : 'ASL'; this.reset(); return this.lang; }
   toggle() { this.mode = this.mode === 'PHRASE' ? 'SPELL' : 'PHRASE'; this.reset(); return this.mode; }
@@ -1777,11 +1707,17 @@ class ASL {
     if (this.cd > 0) { this.cd--; this.disp = this._top(); return [null, this.disp]; }
     const c = {}; this.buf.forEach(x => c[x] = (c[x] || 0) + 1);
     let b = '?', bc = 0; for (const [k, v] of Object.entries(c)) if (v > bc) { b = k; bc = v; }
-    if (b !== '?' && bc >= this.thr) { this.cd = this.cdm; this.buf.length = 0; this.disp = b; return [b, b]; }
+    if (b !== '?' && bc >= this.thr) {
+      if (b === this.lastCommit && !this.released) { this.disp = b; return [null, b]; }
+      this.cd = this.cdm; this.buf.length = 0; this.disp = b;
+      this.lastCommit = b; this.released = false;
+      return [b, b];
+    }
+    if (this.lastCommit && b !== this.lastCommit && bc >= Math.ceil(this.thr / 2)) this.released = true;
     this.disp = this._top(); return [null, this.disp];
   }
   _top() { if (!this.buf.length) return '?'; const c = {}; this.buf.forEach(x => c[x] = (c[x] || 0) + 1); let b = '?', bc = 0; for (const [k, v] of Object.entries(c)) if (v > bc) { b = k; bc = v; } return b; }
-  reset() { this.buf.length = 0; this.disp = '?'; this.cd = 0; this.fg = [false, false, false, false, false]; }
+  reset() { this.buf.length = 0; this.disp = '?'; this.cd = 0; this.fg = [false, false, false, false, false]; this.released = true; }
 }
 
 // ==============================
@@ -1827,10 +1763,11 @@ class App {
     this.hl = null; this.vid = null; this.cvs = null; this.cx = null;
     this.fpsFrames = 0; this.fpsLast = performance.now(); this.fpsVal = 0;
     this.mlReady = false; this.collecting = false; this.collectEvery = 0;
+    this.signModels = {}; this._mlKind = null;
     this.lastLm = null; this.catalog = null;
-    this._mlBusy = false; this._mlLabel = null; this._mlConf = 0;
-    // SVM probabilities are calibrated: 0.50 keeps ~96% of correct predictions
-    // while rejecting ~69% of errors. Frame voting filters what gets through.
+    this._mlBusy = false; this._mlLabel = null; this._mlConf = 0; this._mlTop = null; this._mlMs = 0;
+    // Frames below this confidence vote '?' instead of a letter. The trainer picks it on
+    // the validation set and the server sends it with /api/model-status (0.50 is a fallback).
     this.ML_MIN_CONF = 0.50;
     this.quiz = null;
   }
@@ -1839,7 +1776,7 @@ class App {
     const v = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm");
     this.hl = await HandLandmarker.createFromOptions(v, {
       baseOptions: { modelAssetPath: "/hand_landmarker.task" },
-      numHands: 1, runningMode: "VIDEO",
+      numHands: 2, runningMode: "VIDEO",
       minHandDetectionConfidence: .5, minHandPresenceConfidence: .5, minTrackingConfidence: .5
     });
     document.getElementById('loaderOverlay').classList.add('gone');
@@ -1908,6 +1845,10 @@ class App {
       tab.onclick = () => this.setInputLang(tab.dataset.input);
     });
     document.getElementById('btnRecord').onclick = () => this.toggleRecord();
+    try {
+      const savedSigner = localStorage.getItem('vani_signer');
+      if (savedSigner) document.getElementById('collectSigner').value = savedSigner;
+    } catch (e) { /* storage blocked */ }
     document.getElementById('btnTrain').onclick = () => this.retrainModel();
     document.getElementById('btnPractice').onclick = () => this.startQuiz();
     document.getElementById('quizSkip').onclick = () => this.nextQuizTarget(true);
@@ -1966,29 +1907,44 @@ class App {
     const hint = document.getElementById('collectHint');
     if (hint) {
       hint.textContent = this.asl.mode === 'SPELL'
-        ? 'Spell recording → landmarks.csv (letter model)'
-        : 'Phrase recording → landmarks_phrases.csv (your data)';
+        ? 'Letter samples → dataset/recordings/samples.csv'
+        : `${this.asl.lang} sign samples (one or two hands) → dataset/recordings/samples.csv`;
     }
   }
 
   renderConfidence(handVisible) {
     const row = document.getElementById('confRow');
-    const useMl = this.mlReady && this.asl.mode === 'SPELL';
+    const useMl = this.modelReady();
     if (!useMl) { row.style.display = 'none'; return; }
     row.style.display = 'flex';
-    const pct = handVisible && this._mlLabel ? Math.round(this._mlConf * 100) : 0;
+    const pct = handVisible && this._mlTop ? Math.round(this._mlConf * 100) : 0;
     const fill = document.getElementById('confFill');
     fill.style.width = pct + '%';
     fill.className = 'conf-fill' + (pct >= 60 ? ' high' : pct >= 30 ? ' mid' : '');
     document.getElementById('confVal').textContent =
-      pct && this._mlLabel ? `${this._mlLabel} ${pct}%` : '--';
+      pct && this._mlTop ? `${this._mlTop} ${pct}%` + (this._mlConf < this.thresholdFor(this.currentKind()) ? ' (unsure)' : '') : '--';
   }
 
   // ---- Spell autocomplete ----
+  // Word prediction: the server's noisy-channel model (suggest.py) can fix a misread
+  // letter, e.g. X-E-D -> RED. The built-in WORD_LIST prefix match is the offline fallback.
   suggestions() {
     if (this.asl.mode !== 'SPELL' || this.word.length < 2) return [];
     const p = this.word.toUpperCase();
-    return WORD_LIST.filter(w => w.startsWith(p) && w !== p).slice(0, 4);
+    if (this._sugFor !== p) {
+      this._sugFor = p;
+      this._sugItems = WORD_LIST.filter(w => w.startsWith(p) && w !== p).slice(0, 4).map(word => ({ word, corrected: false }));
+      fetch('/api/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ letters: p })
+      }).then(r => r.json()).then(data => {
+        if (this._sugFor === p && data.success && data.suggestions && data.suggestions.length) {
+          this._sugItems = data.suggestions;
+        }
+      }).catch(() => { /* keep the offline list */ });
+    }
+    return this._sugItems || [];
   }
 
   renderSuggestions() {
@@ -1997,14 +1953,16 @@ class App {
     const items = this.suggestions();
     if (!items.length) { bar.style.display = 'none'; return; }
     bar.style.display = 'flex';
-    if (list.dataset.shown === items.join(',')) return;
-    list.dataset.shown = items.join(',');
+    const key = items.map(i => i.word).join(',');
+    if (list.dataset.shown === key) return;
+    list.dataset.shown = key;
     list.innerHTML = '';
-    for (const w of items) {
+    for (const item of items) {
       const b = document.createElement('button');
-      b.className = 'suggest-chip';
-      b.textContent = w;
-      b.onclick = () => this.acceptSuggestion(w);
+      b.className = 'suggest-chip' + (item.corrected ? ' corrected' : '');
+      b.textContent = item.word;
+      if (item.corrected) b.title = 'Suggested because a letter may have been misread';
+      b.onclick = () => this.acceptSuggestion(item.word);
       list.appendChild(b);
     }
   }
@@ -2092,9 +2050,16 @@ class App {
     btn.disabled = true;
     const label = btn.textContent;
     btn.textContent = 'Training…';
-    showToast('Training the classifier, this takes a few seconds…', 'info', 6000);
+    const kind = this.currentKind();
+    showToast(kind === 'letter'
+      ? 'Training the letter classifier (SVM), this takes about half a minute…'
+      : `Training the ${kind === 'isl' ? 'ISL' : 'phrase'} neural network, this takes about a minute…`, 'info', 6000);
     try {
-      const res = await fetch('/api/train', { method: 'POST' });
+      const res = await fetch('/api/train', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind })
+      });
       const data = await res.json();
       if (data.success) {
         showToast(
@@ -2136,26 +2101,66 @@ class App {
     this.log('Switched to ' + lang, 'letter');
   }
 
+  // Which model the current screen uses: letters (SVM), ASL phrases or ISL signs (MLP networks)
+  currentKind() {
+    if (this.asl.mode === 'SPELL') return 'letter';
+    return this.asl.lang === 'ISL' ? 'isl' : 'phrase';
+  }
+
+  modelReady(kind = this.currentKind()) {
+    if (kind === 'letter') return this.mlReady;
+    return !!(this.signModels[kind] && this.signModels[kind].loaded);
+  }
+
+  thresholdFor(kind) {
+    if (kind === 'letter') return this.ML_MIN_CONF;
+    return (this.signModels[kind] && this.signModels[kind].threshold) || 0.5;
+  }
+
+  updateModelPill() {
+    const pill = document.getElementById('modelPill');
+    const kind = this.currentKind();
+    const on = this.modelReady(kind);
+    const text = on ? (kind === 'letter' ? 'ML MODEL' : 'NEURAL NET') : 'RULES';
+    if (pill.textContent !== text) pill.textContent = text;
+    pill.classList.toggle('on', on);
+  }
+
   async refreshModelStatus() {
     try {
       const res = await fetch('/api/model-status');
       const data = await res.json();
       this.mlReady = !!(data.success && data.model_loaded);
-      const pill = document.getElementById('modelPill');
-      pill.textContent = this.mlReady ? 'ML MODEL' : 'RULES';
-      pill.classList.toggle('on', this.mlReady);
+      if (data.threshold) this.ML_MIN_CONF = Number(data.threshold);
+      this.signModels = data.sign_models || {};
+      this.updateModelPill();
       if (data.samples != null) document.getElementById('collectStat').textContent = data.samples + ' samples';
+      // The public host turns recording and retraining off; hide those controls there
+      this.trainingEnabled = data.training_enabled !== false;
+      ['btnRecord', 'btnTrain', 'collectLabel', 'collectHint', 'collectSigner', 'collectTest'].forEach(id => {
+        const el = document.getElementById(id);
+        const target = id === 'collectTest' ? el && el.parentElement : el;
+        if (target) target.style.display = this.trainingEnabled ? '' : 'none';
+      });
+      if (!this.trainingEnabled) document.getElementById('collectStat').textContent = 'Recording is available when running locally';
     } catch (e) {
       this.mlReady = false;
     }
   }
 
   toggleRecord() {
+    const signerInput = document.getElementById('collectSigner');
+    if (!this.collecting && !signerInput.value.trim()) {
+      showToast('Type the signer\'s name first, so their samples can be kept apart for testing', 'error', 3500);
+      signerInput.focus();
+      return;
+    }
+    try { localStorage.setItem('vani_signer', signerInput.value.trim()); } catch (e) { /* storage blocked */ }
     this.collecting = !this.collecting;
     const btn = document.getElementById('btnRecord');
     btn.textContent = this.collecting ? 'Stop recording' : 'Record dataset';
     btn.classList.toggle('rec-on', this.collecting);
-    const kind = this.asl.mode === 'SPELL' ? 'letter' : 'phrase';
+    const kind = this.currentKind();
     const label = document.getElementById('collectLabel').value || 'sign';
     showToast(
       this.collecting
@@ -2166,38 +2171,45 @@ class App {
     );
   }
 
-  async saveSample(lm) {
+  async saveSample(hands) {
     const label = document.getElementById('collectLabel').value;
-    const kind = this.asl.mode === 'SPELL' ? 'letter' : 'phrase';
+    const kind = this.currentKind();
+    const signer = document.getElementById('collectSigner').value.trim();
+    const split = document.getElementById('collectTest').checked ? 'test' : '';
     try {
       const res = await fetch('/api/collect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ label, landmarks: lm, kind })
+        body: JSON.stringify({ label, hands, kind, signer, split })
       });
       const data = await res.json();
       if (data.success) {
         const target = data.target || 25;
         const done = data.label_count >= target ? ' ✓ goal met' : '';
+        const where = data.split === 'test' ? 'test set' : 'training';
         document.getElementById('collectStat').textContent =
-          `${data.label_count}/${target} × ${data.label}  (${data.samples} in ${data.path})${done}`;
+          `${data.label_count}/${target} × ${data.label} (${where}, ${data.samples} ${data.kind} samples)${done}`;
       }
     } catch (e) { /* ignore dropped frames */ }
   }
 
-  async classifyMl(lm) {
+  async classifyMl(hands, kind) {
+    const t0 = performance.now();
     try {
+      // Letters use the SVM on the first hand; phrase / ISL use the MLP on both hands
       const res = await fetch('/api/classify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ landmarks: lm })
+        body: JSON.stringify({ mode: kind, hands })
       });
       const data = await res.json();
+      // Smoothed round-trip time (browser -> Flask -> browser), shown next to FPS
+      const ms = performance.now() - t0;
+      this._mlMs = this._mlMs ? this._mlMs * 0.8 + ms * 0.2 : ms;
       if (!data.success || !data.label) return null;
       const conf = data.confidence == null ? 1 : Number(data.confidence);
-      // Accept mid-confidence RF votes; reject only very unsure ones
-      if (conf >= this.ML_MIN_CONF) return { label: data.label, confidence: conf };
-    } catch (e) { /* fall back to rules */ }
+      return { label: data.label, confidence: conf, kind, accepted: conf >= this.thresholdFor(kind) };
+    } catch (e) { /* network hiccup: keep the last result */ }
     return null;
   }
 
@@ -2235,28 +2247,39 @@ class App {
     let sign = '?', com = null, ok = false;
     if (r.landmarks && r.landmarks.length) {
       ok = true; const lm = r.landmarks[0];
+      // Up to two hands, each with MediaPipe's Left / Right label
+      const hands = r.landmarks.slice(0, 2).map((l, i) => ({
+        landmarks: l,
+        handedness: (r.handednesses && r.handednesses[i] && r.handednesses[i][0]) ? r.handednesses[i][0].categoryName : ''
+      }));
       this.lastLm = lm;
-      this.draw(lm);
+      hands.forEach(h => this.draw(h.landmarks));
       if (this.collecting) {
         this.collectEvery++;
-        if (this.collectEvery % 4 === 0) this.saveSample(lm);
+        if (this.collectEvery % 4 === 0) this.saveSample(hands);
       }
-      // Letter model only — do not mix into Phrase/ISL buffers
-      const useMl = this.mlReady && this.asl.mode === 'SPELL';
+      // Use the trained model for this screen if there is one; otherwise the rules decide
+      const kind = this.currentKind();
+      const useMl = this.modelReady(kind);
       if (useMl && !this._mlBusy) {
         this._mlBusy = true;
-        this.classifyMl(lm).then(result => {
+        this.classifyMl(hands, kind).then(result => {
           if (result) {
-            this._mlLabel = result.label;
+            // An unsure frame votes '?', so it can never push a wrong sign into the sentence
+            this._mlLabel = result.accepted ? result.label : '?';
+            this._mlTop = result.label;
             this._mlConf = result.confidence;
+            this._mlKind = result.kind;
           }
         }).finally(() => { this._mlBusy = false; });
       }
-      const forced = useMl ? this._mlLabel : null;
+      // Ignore a result that belongs to the previous screen (e.g. a letter after switching to Phrase)
+      const forced = useMl && this._mlKind === kind ? this._mlLabel : null;
       [com, sign] = this.asl.update(lm, forced);
     } else {
       this.asl.reset();
       this._mlLabel = null;
+      this._mlTop = null;
       this._mlConf = 0;
     }
 
@@ -2343,7 +2366,9 @@ class App {
     document.getElementById('stSigns').textContent = this.signs;
     document.getElementById('stWords').textContent = this.words;
     document.getElementById('stSent').textContent = this.sents;
-    document.getElementById('fpsBadge').textContent = this.fpsVal + ' FPS';
+    document.getElementById('fpsBadge').textContent = this.fpsVal + ' FPS'
+      + (this.modelReady() && this._mlMs ? ` · ${Math.round(this._mlMs)} ms` : '');
+    this.updateModelPill();
     this.renderConfidence(ok);
     this.renderSuggestions();
 

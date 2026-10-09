@@ -22,7 +22,7 @@ Open **http://127.0.0.1:5001**, create an account or sign in. Deploy settings be
 | Bind | `127.0.0.1` | `0.0.0.0` (auto when `RENDER` is set) |
 | Login | email + password (SQLite) | **Continue as guest** (`AUTH_MODE=guest`) so a wiped disk does not lock people out |
 | Hand model | already on this Mac | downloaded on first boot if missing |
-| Letter SVM | local file | shipped in git (`models/sign_rf.joblib`) |
+| Letter SVM | local file | shipped in git (`models/sign_svm.joblib`) |
 
 Do not use terminal OTP on a host — nobody can read the server log.
 
@@ -82,7 +82,8 @@ Gmail OTP (optional): App password, not your normal Gmail password. See `Code/.e
 
 - Never commit `.env` or `users.db`.
 - `hand_landmarker.task` stays gitignored; the server downloads it if missing.
-- `models/sign_rf.joblib` is in git so Spell mode works on a fresh host.
+- `models/sign_svm.joblib` is in git so Spell mode works on a fresh host.
+- Recording and retraining are off on public hosts. Set `ALLOW_TRAINING=1` only if you really want visitors to change the model.
 
 ---
 
