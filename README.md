@@ -23,7 +23,7 @@
 **Live app:** [https://vani-setu.onrender.com](https://vani-setu.onrender.com)  
 Open the link → **Continue as guest** → **Start camera** (allow the webcam). The Free Render instance sleeps after idle time; the first load can take about a minute.
 
-A laptop camera tracks one or two hands in the browser. Machine learning turns them into fingerspelled letters or whole signs, the app builds a sentence (with word prediction that can fix a misread letter), speaks it, and translates it into 25+ languages.
+A laptop camera tracks one or two hands in the browser. Machine learning turns them into fingerspelled letters or whole signs, the app builds a sentence (with word prediction that can fix a misread letter), speaks it, and shows it in English and Hindi. A built-in **Dictionary** shows how to make every letter and sign.
 
 Day to day, run it on **localhost** at `http://127.0.0.1:5001` (`./run.sh`). The public URL is the same product over HTTPS.
 
@@ -38,6 +38,8 @@ Day to day, run it on **localhost** at `http://127.0.0.1:5001` (`./run.sh`). The
 | **Neural networks** | Keras MLP (Dense 128 → 64, ReLU, dropout, softmax) for letters, ASL phrases and ISL signs. Weights are exported and run with NumPy, so the server needs no TensorFlow. |
 | **Two hands** | MediaPipe tracks two hands; phrase and ISL samples keep both, with their Left / Right label (181 features). |
 | **Word prediction** | Noisy-channel model: word frequency × how often the classifier confuses letters, so X-E-D still suggests RED. |
+| **Dictionary** | New screen showing how to make every letter and sign, with drawings and English / Hindi instructions. |
+| **Output** | Translation is now English and Hindi only. |
 | **Data** | Every sample is stored as raw landmarks with the signer's name, hand and a **Test set** flag for new-signer testing. |
 | **Evaluation** | `evaluate.py`: before/after, cross-validation, learning and validation curves, PCA / t-SNE, speed. `compare_models.py`: six models on identical data. |
 | **App** | Holding a sign types it once; unsure frames are ignored; the label always matches its confidence; FPS badge shows response time. |
@@ -79,7 +81,7 @@ All on the same held-out test set (319 samples, 26 letters). Full report: [`repo
 | **Backend** | Python 3 · Flask · Flask-CORS · Gunicorn |
 | **Machine learning** | scikit-learn **RBF SVM** for letters (96.9% test, Platt-scaled probabilities) · **Keras MLP** for phrases / ISL, run with NumPy · landmark augmentation · noisy-channel word prediction · matplotlib reports |
 | **Accounts** | Flask-SQLAlchemy · Werkzeug password hashes · SQLite locally · optional Postgres (`DATABASE_URL`) |
-| **Speech & language** | Web Speech API (speak) · deep-translator / Google Translate · offline Hindi fallback |
+| **Speech & language** | Web Speech API (speak) · English → Hindi with deep-translator / Google Translate · offline Hindi fallback |
 | **Data** | ASL Now fingerspelling landmarks (Hugging Face, MIT) + team recordings · raw 21-point landmarks · 88 features (scaled points, fingertip distances, joint angles) |
 | **Run & ship** | `run.sh` on localhost · Render (HTTPS) · GitHub · python-dotenv |
 
@@ -104,7 +106,8 @@ Flask API ──► SVM, 88 features (Spell)
 | **Phrase** | Whole signs such as Hello, Yes, OK. A Keras **MLP neural network** on both hands (181 features) once phrase samples are recorded and trained; hand-written finger rules until then. |
 | **ISL** | Indian signs (Namaste, Thank You, Water, Help, …), one or two hands. Same neural network approach with its own model; rules as the fallback. Not a certified ISL lexicon. |
 | **Practice** | The app prompts a letter and scores your attempts. |
-| **Translate / Speak** | English sentence → 25+ languages, plus browser speech. Hindi has an offline fallback if Google Translate is down. |
+| **Translate / Speak** | The sentence in English or Hindi, plus browser speech. Hindi has an offline fallback if Google Translate is down. |
+| **Dictionary** | How to make every sign: letters A–Z drawn from real recorded hands, ASL phrases and ISL signs drawn from the shape the app recognises, with instructions in English or Hindi, search, and a **Try it** button. |
 
 Also included:
 
@@ -113,7 +116,7 @@ Also included:
 - Word prediction while spelling: a noisy-channel model (word frequencies × the letter model's confusion matrix) can fix a misread letter, e.g. X-E-D → RED; corrected suggestions have a dashed border
 - Holding a sign types it once; drop the hand briefly for a double letter
 - Record dataset (with signer name and a **Test set** box) + **Retrain model** from the browser, on localhost
-- Sign Guide overlay
+- Dictionary (शब्दकोश) of all 53 signs, searchable in English or Hindi
 
 ---
 

@@ -41,7 +41,8 @@ model without restarting the server.
 5. **Word suggestions** — spell a prefix, tap a chip to complete the word  
 6. **Practice mode** — the app prompts a letter and scores your attempts  
 7. **Phrase** / **ISL** → rule-based poses (record your own samples for the report)  
-8. Translate into 25+ languages + Speak  
+8. Translate the sentence into Hindi + Speak  
+9. **Dictionary** — how to make every letter and sign, in English or Hindi  
 9. **Retrain model** button — trains and hot-reloads without a terminal  
 
 ## Pre-demo health check
@@ -63,7 +64,7 @@ curl -s http://127.0.0.1:5001/api/health
 - [ ] Switch to Phrase: Hello / Peace / OK  
 - [ ] Switch language (e.g. Hindi) and Speak  
 - [ ] Click **Retrain model** to show training runs from the browser  
-- [ ] Open Sign Guide briefly  
+- [ ] Open the Dictionary, switch to हिन्दी, and press **Try it** on a letter  
 - [ ] Logout (camera LED should turn off)
 
 ## Talking points for the examiner
