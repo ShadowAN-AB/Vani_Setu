@@ -4,7 +4,7 @@
     "gamma": "scale",
     "val_accuracy": 0.9687,
     "val_macro_f1": 0.971,
-    "fit_seconds": 0.92
+    "fit_seconds": 0.45
   },
   "results": [
     {
@@ -12,84 +12,84 @@
       "gamma": "scale",
       "val_accuracy": 0.9687,
       "val_macro_f1": 0.971,
-      "fit_seconds": 0.92
+      "fit_seconds": 0.45
     },
     {
       "C": 3,
       "gamma": 0.01,
       "val_accuracy": 0.9687,
       "val_macro_f1": 0.971,
-      "fit_seconds": 0.87
+      "fit_seconds": 0.43
     },
     {
       "C": 3,
       "gamma": 0.03,
       "val_accuracy": 0.9655,
       "val_macro_f1": 0.9675,
-      "fit_seconds": 1.32
+      "fit_seconds": 0.68
     },
     {
       "C": 10,
       "gamma": "scale",
       "val_accuracy": 0.9687,
       "val_macro_f1": 0.971,
-      "fit_seconds": 0.81
+      "fit_seconds": 0.42
     },
     {
       "C": 10,
       "gamma": 0.01,
       "val_accuracy": 0.9687,
       "val_macro_f1": 0.971,
-      "fit_seconds": 0.81
+      "fit_seconds": 0.4
     },
     {
       "C": 10,
       "gamma": 0.03,
       "val_accuracy": 0.9624,
       "val_macro_f1": 0.9642,
-      "fit_seconds": 1.37
+      "fit_seconds": 0.67
     },
     {
       "C": 30,
       "gamma": "scale",
       "val_accuracy": 0.9687,
       "val_macro_f1": 0.971,
-      "fit_seconds": 0.85
+      "fit_seconds": 0.42
     },
     {
       "C": 30,
       "gamma": 0.01,
       "val_accuracy": 0.9687,
       "val_macro_f1": 0.971,
-      "fit_seconds": 0.8
+      "fit_seconds": 0.4
     },
     {
       "C": 30,
       "gamma": 0.03,
       "val_accuracy": 0.9624,
       "val_macro_f1": 0.9642,
-      "fit_seconds": 1.46
+      "fit_seconds": 0.67
     },
     {
       "C": 100,
       "gamma": "scale",
       "val_accuracy": 0.9687,
       "val_macro_f1": 0.971,
-      "fit_seconds": 0.79
+      "fit_seconds": 0.43
     },
     {
       "C": 100,
       "gamma": 0.01,
       "val_accuracy": 0.9687,
       "val_macro_f1": 0.971,
-      "fit_seconds": 0.76
+      "fit_seconds": 0.41
     },
     {
       "C": 100,
       "gamma": 0.03,
       "val_accuracy": 0.9655,
       "val_macro_f1": 0.9675,
-      "fit_seconds": 1.31
+      "fit_seconds": 0.69
     }
   ],
   "feature_version": 2,

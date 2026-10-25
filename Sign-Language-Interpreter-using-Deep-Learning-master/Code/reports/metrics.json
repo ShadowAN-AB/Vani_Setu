@@ -82,8 +82,8 @@
       "count": 1
     }
   ],
-  "latency_ms_per_frame": 1.14,
-  "fit_seconds": 4.22,
+  "latency_ms_per_frame": 0.483,
+  "fit_seconds": 2.32,
   "per_class_counts": {
     "A": 65,
     "B": 69,
@@ -112,5 +112,5 @@
     "Y": 82,
     "Z": 155
   },
-  "trained_at": "2026-10-09T16:31:54+00:00"
+  "trained_at": "2026-10-09T17:09:55+00:00"
 }
