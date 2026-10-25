@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Vani-Setu — Project Report and Viva Guide</title>
+  <style>
+    @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Times New Roman", Times, serif;
+      font-size: 11.5pt;
+      line-height: 1.45;
+      color: #1a2426;
+      max-width: 210mm;
+      margin: 0 auto;
+    }
+    h1, h2, h3, h4 { font-family: "Palatino Linotype", Palatino, "Times New Roman", serif; color: #0b5f66; page-break-after: avoid; }
+    h1 { font-size: 22pt; margin: 0 0 8pt; }
+    h2 { font-size: 15pt; border-bottom: 1.5px solid #0b5f66; padding-bottom: 3pt; margin-top: 22pt; }
+    h3 { font-size: 12.5pt; margin-top: 14pt; color: #08484e; }
+    h4 { font-size: 11.5pt; margin-bottom: 4pt; }
+    p { margin: 0 0 8pt; text-align: justify; }
+    ul, ol { margin: 0 0 10pt 18pt; }
+    li { margin-bottom: 3pt; }
+    table { width: 100%; border-collapse: collapse; margin: 8pt 0 12pt; font-size: 10.5pt; page-break-inside: avoid; }
+    th, td { border: 1px solid #b8c9cc; padding: 5pt 7pt; vertical-align: top; }
+    th { background: #d7ecee; color: #08484e; text-align: left; }
+    .cover { page-break-after: always; text-align: center; padding-top: 28mm; }
+    .cover .kicker { letter-spacing: 0.18em; font-size: 10pt; color: #0b5f66; text-transform: uppercase; }
+    .cover h1 { font-size: 28pt; margin: 12pt 0 6pt; }
+    .cover .sub { font-size: 13pt; color: #3d4f52; margin-bottom: 22pt; }
+    .meta { display: inline-block; text-align: left; margin-top: 18pt; font-size: 11.5pt; }
+    .meta td { border: none; padding: 4pt 10pt 4pt 0; }
+    .box { border: 1px solid #b8c9cc; background: #f3f7f6; padding: 10pt 12pt; margin: 10pt 0; page-break-inside: avoid; }
+    .q { font-weight: bold; color: #08484e; }
+    .a { margin: 0 0 10pt 12pt; }
+    .fig { text-align: center; margin: 12pt 0; page-break-inside: avoid; }
+    .fig img { max-width: 100%; height: auto; border: 1px solid #d5e0e2; }
+    .caption { font-size: 10pt; color: #3d4f52; font-style: italic; margin-top: 4pt; }
+    .mono { font-family: "Courier New", Courier, monospace; font-size: 9.5pt; }
+    .small { font-size: 10pt; color: #3d4f52; }
+    .toc a { color: inherit; text-decoration: none; }
+    .toc td { border: none; padding: 3pt 0; }
+    .page-break { page-break-before: always; }
+    .role { color: #c97816; font-weight: bold; }
+    code { font-family: "Courier New", Courier, monospace; font-size: 10pt; }
+    pre {
+      font-family: "Courier New", Courier, monospace;
+      font-size: 9pt;
+      background: #f3f7f6;
+      border: 1px solid #d5e0e2;
+      padding: 8pt 10pt;
+      white-space: pre-wrap;
+      page-break-inside: avoid;
+    }
+    .footer-note { font-size: 9.5pt; color: #6b7c7f; margin-top: 18pt; }
+  </style>
+</head>
+<body>
+
+<section class="cover">
+  <div class="kicker">College project report &amp; viva guide</div>
+  <h1>Vani-Setu</h1>
+  <p class="sub">A real-time sign language translator<br>from camera gesture to spoken and translated text</p>
+  <p><em>Vani-Setu</em> means “voice-bridge”: one hand in front of a webcam is turned into words, speech, and translation.</p>
+  <table class="meta">
+    <tr><td><strong>Project</strong></td><td>Vani-Setu — Sign Language Interpreter (college iteration)</td></tr>
+    <tr><td><strong>Team size</strong></td><td>3 members</td></tr>
+    <tr><td><strong>Repository</strong></td><td>https://github.com/ShadowAN-AB/Vani_Setu</td></tr>
+    <tr><td><strong>Run command</strong></td><td class="mono">./run.sh &nbsp;→&nbsp; http://127.0.0.1:5001</td></tr>
+    <tr><td><strong>Spell-mode accuracy</strong></td><td>95.1% held-out (RBF SVM, 26 letters, 2122 samples)</td></tr>
+  </table>
+  <p style="margin-top:28pt;"><strong>Write your names here before printing / submitting</strong></p>
+  <table>
+    <tr><th>Member</th><th>Slice of the product</th><th>Name</th><th>Roll no.</th></tr>
+    <tr><td>1</td><td>Live Spell path — camera UI, classify API, SVM features</td><td></td><td></td></tr>
+    <tr><td>2</td><td>Product path — login UI, OTP/translate APIs, phrase/ISL rules</td><td></td><td></td></tr>
+    <tr><td>3</td><td>Data path — record/practice UI, collect/train APIs, evaluation</td><td></td><td></td></tr>
+  </table>
+  <p class="small">Every member worked on <strong>frontend + backend + ML</strong>. The slice is which user journey they own, not a single layer of the stack.</p>
+</section>
+
+<h2>Contents</h2>
+<table class="toc">
+  <tr><td>1.</td><td>Abstract and problem</td></tr>
+  <tr><td>2.</td><td>Objectives</td></tr>
+  <tr><td>3.</td><td>How the system works (architecture)</td></tr>
+  <tr><td>4.</td><td>Technologies and why they were chosen</td></tr>
+  <tr><td>5.</td><td>Team division and individual contributions</td></tr>
+  <tr><td>6.</td><td>Module details (frontend, backend, ML)</td></tr>
+  <tr><td>7.</td><td>Dataset, training, and results</td></tr>
+  <tr><td>8.</td><td>Limitations, ethics, and future work</td></tr>
+  <tr><td>9.</td><td>How to run and what to demo</td></tr>
+  <tr><td>10.</td><td>Viva questions and answers by member</td></tr>
+  <tr><td>11.</td><td>References</td></tr>
+</table>
+
+<h2>1. Abstract and problem</h2>
+<p>
+Sign language is a complete language, not a code for English. Most hearing people cannot read it, so a deaf or hard-of-hearing person often needs a human interpreter. That is not available in every classroom, office, or kiosk. <strong>Vani-Setu</strong> is a camera-based prototype that tracks one hand, maps the pose to a word or letter, builds a sentence, speaks it, and can translate it into 25+ written languages.
+</p>
+<p>
+The original open-source project was a 2019 hackathon CNN that classified cropped hand images. In this college iteration the working product is a <strong>browser app</strong>: MediaPipe extracts 21 hand landmarks on the device, Spell mode uses a trained <strong>Support Vector Machine</strong>, Phrase and simplified ISL modes use <strong>rule-based finger geometry</strong>, and a Flask server handles login, translation, dataset collection, and retraining.
+</p>
+<div class="box">
+  <strong>One-line pitch for the examiner:</strong>
+  “We built a local web app that turns a webcam hand pose into text and speech, using MediaPipe landmarks and an SVM that reaches 95.1% on ASL fingerspelling A–Z, with a rule-based phrase layer and OTP login.”
+</div>
+
+<h2>2. Objectives</h2>
+<ol>
+  <li>Detect a single hand in a live camera feed without sending video to a cloud vision API.</li>
+  <li>Classify static poses as either whole phrases or fingerspelled letters.</li>
+  <li>Stabilize noisy frame-by-frame predictions so the sentence does not fill with junk letters.</li>
+  <li>Speak the result and translate the English sentence.</li>
+  <li>Provide a path to record more data and retrain from the UI.</li>
+  <li>Document honest limits (one hand, static poses, classroom ISL, not a certified interpreter).</li>
+</ol>
+
+<h2>3. How the system works (architecture)</h2>
+<p>Video never leaves the laptop. Only OTP, translation text, landmarks for training, and classify requests go to Flask on localhost.</p>
+<pre>Camera
+  → Browser (index.html)
+       MediaPipe Hand Landmarker  →  21 (x, y, z) points
+       Spell mode: POST /api/classify  →  SVM letter + confidence
+       Phrase / ISL: JavaScript finger rules  →  word
+       Buffer 14 frames, commit after 9 agree
+       Web Speech API (speak)
+  → Flask (server.py, port 5001)
+       OTP login, translate, collect, train, health
+  → Optional: Google Translate (text only)
+       Hindi offline fallback if the API fails</pre>
+<p><strong>Landmark idea:</strong> MediaPipe returns 21 joints (wrist, thumb, index, middle, ring, pinky). We subtract the wrist so the feature vector is <em>relative</em>, not “where the hand sits in the frame”. That gives 21 × 3 = <strong>63 numbers</strong> per frame — the input to the SVM.</p>
+<p><strong>Temporal voting:</strong> A single frame is noisy. The app keeps a buffer of 14 labels and only “commits” a sign when the same label appears in at least 9 of them. Then a short cooldown prevents double-counting.</p>
+
+<h2>4. Technologies and why they were chosen</h2>
+<table>
+  <tr><th>Layer</th><th>Tool</th><th>Why (viva answer)</th></tr>
+  <tr><td>Hand tracking</td><td>MediaPipe Hand Landmarker</td><td>Runs in the browser, 21 3D points, no GPU CNN required at demo time</td></tr>
+  <tr><td>Web UI</td><td>HTML / CSS / JS</td><td>One file the Flask server can ship; camera + TTS are already in the browser</td></tr>
+  <tr><td>Backend</td><td>Flask</td><td>Small Python API; easy to demo and retrain from the same process</td></tr>
+  <tr><td>Auth</td><td>Email OTP + CAPTCHA</td><td>Shows a login story without storing passwords; OTP prints in the terminal if SMTP is unset</td></tr>
+  <tr><td>Letter classifier</td><td>RBF SVM + StandardScaler</td><td>Beat RF, KNN, logistic regression, and a decision tree on the same features (95.1%)</td></tr>
+  <tr><td>Phrase / ISL</td><td>Finger-count geometry rules</td><td>Works with zero phrase samples; not a substitute for a real ISL lexicon</td></tr>
+  <tr><td>Translation</td><td>deep-translator + offline Hindi</td><td>25+ languages; Hindi still works if Google is blocked</td></tr>
+  <tr><td>Speech</td><td>Web Speech API</td><td>No extra TTS server</td></tr>
+  <tr><td>Model I/O</td><td>joblib</td><td>Save/load the sklearn pipeline</td></tr>
+</table>
+<p>The old Keras CNN path (<code>cnn_model_train.py</code>, <code>final.py</code>) is still in the repo but <strong>is not the demo</strong>: training images and <code>cnn_model_keras2.h5</code> are missing.</p>
+
+<h2 class="page-break">5. Team division and individual contributions</h2>
+<p>
+The team did <strong>not</strong> split as “one person frontend, one backend, one ML”. Each member owns a <strong>vertical slice</strong> of the product and therefore has work in all three layers. In the viva you can say: “I worked on frontend, backend, and ML for my slice; my teammates did the same for theirs.”
+</p>
+
+<table>
+  <tr>
+    <th>Layer</th>
+    <th>Member 1 — Live Spell</th>
+    <th>Member 2 — Login, phrase, translate</th>
+    <th>Member 3 — Record, train, practice</th>
+  </tr>
+  <tr>
+    <td><strong>Frontend</strong></td>
+    <td>Camera, MediaPipe draw loop, Spell toggle, confidence bar, 14-frame vote</td>
+    <td>OTP/CAPTCHA screens, Phrase/ISL tabs, Sign Guide, language row, Speak</td>
+    <td>Record bar, Retrain button, Practice panel, suggestion chips, camera stop on logout</td>
+  </tr>
+  <tr>
+    <td><strong>Backend</strong></td>
+    <td><code>/api/classify</code>, load <code>sign_rf.joblib</code>, return label + probability</td>
+    <td><code>/api/send-otp</code>, <code>/api/verify-otp</code>, <code>/api/translate</code>, <code>/api/signs</code>, <code>signs.py</code></td>
+    <td><code>/api/collect</code>, <code>/api/train</code>, <code>/api/health</code>, <code>run.sh</code>, <code>.env.example</code></td>
+  </tr>
+  <tr>
+    <td><strong>ML</strong></td>
+    <td>63-D wrist-relative features; SVM at inference; confidence floor 0.50</td>
+    <td>Rule-based Phrase/ISL geometry (a non-learned classifier); keep phrases out of the letter model</td>
+    <td>Dataset conversion, train/test split, 5-model comparison, confusion matrix, recording policy</td>
+  </tr>
+</table>
+
+<h3>5.1 Member 1 — Live Spell recognition</h3>
+<p class="role">Contribution statement (read this in viva)</p>
+<p>
+I own the live Spell journey from webcam to letter. On the <strong>frontend</strong> I wired MediaPipe, the skeleton overlay, Spell mode, the confidence bar, and majority voting. On the <strong>backend</strong> I own <code>/api/classify</code>. On the <strong>ML</strong> side I own the 63-D feature used at inference and the 0.50 probability cutoff that decides when to trust the SVM versus letter rules.
+</p>
+<p><strong>Frontend</strong></p>
+<ul>
+  <li>MediaPipe <code>HandLandmarker</code> in VIDEO mode, one hand, local <code>hand_landmarker.task</code>.</li>
+  <li>Canvas skeleton; Spell vs Phrase pill; live confidence bar from <code>predict_proba</code>.</li>
+  <li>Buffer of 14 labels, commit after 9 agree, cooldown so letters are not doubled.</li>
+  <li>ML labels are used only in Spell — Phrase never sees A–Z classes.</li>
+</ul>
+<p><strong>Backend</strong></p>
+<ul>
+  <li><code>POST /api/classify</code> accepts 21 landmarks, calls <code>landmarks_to_features</code>, runs the loaded sklearn pipeline, returns <code>label</code> and <code>confidence</code>.</li>
+  <li>Model is loaded once at process start with joblib; missing file → 404 so the UI falls back to rules.</li>
+</ul>
+<p><strong>ML</strong></p>
+<ul>
+  <li>Wrist-relative 63-D vector (21 points × x,y,z minus wrist) so hand position in the frame mostly cancels.</li>
+  <li>Production inference model: RBF SVM with probability estimates (95.1% held-out).</li>
+  <li>Threshold 0.50: keeps most correct votes, rejects a large share of errors, then voting filters the rest.</li>
+</ul>
+<p><strong>Concepts:</strong> MediaPipe landmarks; client-side video vs server-side classify JSON; majority vote; SVM at predict time; confidence vs accuracy.</p>
+
+<h3>5.2 Member 2 — Login, phrases, and translation</h3>
+<p class="role">Contribution statement</p>
+<p>
+I own the product around the recognizer: getting a user in, switching Phrase/ISL, showing the Sign Guide, and translating/speaking the sentence. <strong>Frontend:</strong> login and output UI. <strong>Backend:</strong> OTP and translate APIs. <strong>ML:</strong> the rule-based pose classifier (finger geometry) and the design choice that Phrase/ISL are not stuffed into the A–Z SVM.
+</p>
+<p><strong>Frontend</strong></p>
+<ul>
+  <li>Email → OTP boxes → math CAPTCHA → <code>sessionStorage</code> login flag.</li>
+  <li>ASL / ISL input tabs, Phrase mode UI, Sign Guide modal, About copy.</li>
+  <li>Output language tabs, Speak / Space / Sentence / Clear, Web Speech API.</li>
+</ul>
+<p><strong>Backend</strong></p>
+<ul>
+  <li><code>/api/send-otp</code> and <code>/api/verify-otp</code>: 6 digits, 5 min expiry, rate limit, attempt cap; terminal print if SMTP is empty.</li>
+  <li><code>/api/translate</code> via deep-translator, cache, Hindi <code>OFFLINE_HI</code> fallback in <code>signs.py</code>.</li>
+  <li><code>/api/signs</code> and <code>/api/languages</code> so the UI does not hard-code every catalogue string twice.</li>
+  <li>Port <strong>5001</strong> (macOS AirPlay uses 5000). Secrets stay in <code>.env</code>, not in git.</li>
+</ul>
+<p><strong>ML</strong></p>
+<ul>
+  <li>Rule-based Phrase/ISL: count extended fingers and pairwise distances (Hello vs Stop, V vs U, Namaste, Thank You).</li>
+  <li>This is still a classifier — just hand-written features and if/else instead of SVM weights.</li>
+  <li>Why not train phrases on the letter SVM? Different label space; mixing “Hello” into A–Z would destroy Spell accuracy.</li>
+  <li>Honest limit: ISL here is a one-hand classroom sketch, not a certified lexicon.</li>
+</ul>
+<p><strong>Concepts:</strong> OTP vs passwords; REST; translation APIs vs offline fallback; rule-based vs learned models; ethics of claiming “ISL translator”.</p>
+
+<h3>5.3 Member 3 — Recording, training, and practice</h3>
+<p class="role">Contribution statement</p>
+<p>
+I own the loop that improves the model and the classroom extras around it. <strong>Frontend:</strong> dataset recorder, Retrain button, Practice mode, word suggestions, releasing the webcam. <strong>Backend:</strong> collect/train/health and <code>run.sh</code>. <strong>ML:</strong> building <code>landmarks.csv</code>, comparing five models, writing the confusion matrix, and the two-file recording policy.
+</p>
+<p><strong>Frontend</strong></p>
+<ul>
+  <li>Record dataset + label dropdown; progress toward ~25 samples per sign.</li>
+  <li>Retrain model button (calls <code>/api/train</code>, shows accuracy toast).</li>
+  <li>Practice mode: random letter (not J/Z), score, streak, skip/end.</li>
+  <li>Suggestion chips after two spelled letters (local word list).</li>
+  <li><code>stopCamera()</code> on logout / pagehide so the Mac LED turns off.</li>
+</ul>
+<p><strong>Backend</strong></p>
+<ul>
+  <li><code>/api/collect</code>: <code>kind=letter</code> → <code>landmarks.csv</code>; <code>kind=phrase</code> → <code>landmarks_phrases.csv</code>.</li>
+  <li><code>/api/train</code>: subprocess <code>train_classifier.py</code>, mutex (second click → 409), hot-reload joblib.</li>
+  <li><code>/api/health</code> and <code>/api/model-status</code> for the pre-demo check.</li>
+  <li><code>run.sh</code>: venv, <code>requirements_web.txt</code>, start Flask.</li>
+</ul>
+<p><strong>ML</strong></p>
+<ul>
+  <li>Converted ASL Now fingerspelling JSON → 2122 wrist-relative rows, A–Z, MIT licence.</li>
+  <li><code>train_classifier.py</code>: stratified 75/25, <code>StandardScaler</code> + SVM, <code>reports/</code>.</li>
+  <li><code>compare_models.py</code>: SVM 95.1% vs logistic 94.0%, RF 88.1%, KNN 85.7%, tree 74.6%.</li>
+  <li>J/Z weak because they are motion letters; Practice pool excludes them for fairness.</li>
+</ul>
+<p><strong>Concepts:</strong> train/test and stratification; cross-validation; confusion matrix; overfitting; why we compare models instead of picking one by name; subprocess training; dataset licence.</p>
+
+<h3>5.4 Shared team work</h3>
+<ul>
+  <li>GitHub <code>main</code>, <code>.gitignore</code> (venv, <code>.env</code>, raw HF dump, joblib weights).</li>
+  <li>UI brand (light “bridge daylight” theme) and demo script in <code>DEMO_AND_VIVA.md</code>.</li>
+  <li>Same limitations sentence in viva: one hand, static poses, ASL letters, classroom ISL, not a certified interpreter.</li>
+</ul>
+
+<h2>6. Module details</h2>
+<h3>6.1 Login</h3>
+<p>Email → OTP → simple math CAPTCHA → <code>sessionStorage</code> flag. This is a classroom gate, not production identity. Session is per browser tab family and is not a signed JWT.</p>
+<h3>6.2 Recognition modes</h3>
+<table>
+  <tr><th>Mode</th><th>Method</th><th>Examples</th></tr>
+  <tr><td>Spell + ML loaded</td><td>SVM on 63-D vector, threshold 0.50, then vote</td><td>A–Z (J/Z weak)</td></tr>
+  <tr><td>Spell fallback</td><td>Finger geometry rules</td><td>L, V, W, B, O, …</td></tr>
+  <tr><td>Phrase (ASL)</td><td>Rules only</td><td>Hello, Stop, Peace, OK, I Love You</td></tr>
+  <tr><td>ISL tab</td><td>Simplified one-hand rules</td><td>Namaste, Thank You, Water, Help</td></tr>
+</table>
+<h3>6.3 Practice and suggestions</h3>
+<p>Practice asks for a random letter and scores holds. Suggestions appear after two letters of the current word (local dictionary — not a cloud LLM).</p>
+
+<h2>7. Dataset, training, and results</h2>
+<p>
+Public set: <strong>ASL Now Fingerspelling Landmarks</strong> (MediaPipe JSON, MIT). Converted to wrist-relative 63-D rows. <strong>2122 samples, 26 classes, 1591 train / 531 test</strong>, stratified, seed 42.
+</p>
+<table>
+  <tr><th>Model</th><th>Test accuracy</th><th>Macro F1</th><th>5-fold CV</th></tr>
+  <tr><td><strong>SVM (RBF)</strong></td><td><strong>95.1%</strong></td><td>0.953</td><td>94.1% ± 0.5%</td></tr>
+  <tr><td>Logistic Regression</td><td>94.0%</td><td>0.940</td><td>92.5% ± 0.6%</td></tr>
+  <tr><td>Random Forest</td><td>88.1%</td><td>0.879</td><td>87.9% ± 2.0%</td></tr>
+  <tr><td>K-Nearest Neighbours</td><td>85.7%</td><td>0.853</td><td>84.9% ± 1.2%</td></tr>
+  <tr><td>Decision Tree</td><td>74.6%</td><td>0.739</td><td>74.8% ± 2.1%</td></tr>
+</table>
+<p>SVM was chosen because it won on held-out accuracy <em>and</em> cross-validation, and <code>probability=True</code> feeds the on-screen confidence bar. The saved pipeline is small (~1 MB) compared with the earlier Random Forest file (~22 MB).</p>
+<div class="fig">
+  <img src="assets/model_comparison.png" alt="Bar chart of classifier test accuracy" />
+  <div class="caption">Figure 1. Same 63-D features, five classifiers. SVM is highlighted as the production model.</div>
+</div>
+<div class="fig">
+  <img src="assets/confusion_matrix.png" alt="Confusion matrix of the SVM" />
+  <div class="caption">Figure 2. SVM confusion matrix on the 531-sample test split. Off-diagonal cells are the letters the viva panel may ask about (often similar shapes such as M/N, R/U, or motion letters).</div>
+</div>
+<p><strong>If they ask “is 95.1% the live camera accuracy?”</strong> Answer: it is <em>held-out accuracy on the landmark dataset</em>. Live accuracy depends on lighting, camera, and how close your pose is to the training set. That is why we use a confidence floor and frame voting.</p>
+
+<h2>8. Limitations, ethics, and future work</h2>
+<ul>
+  <li><strong>One hand, mostly static poses.</strong> Real ISL and ASL use two hands, face, and motion. J and Z in ASL are drawn in the air.</li>
+  <li><strong>ISL in the app is a teaching approximation</strong>, not a certified lexicon. Do not claim medical or legal interpreting.</li>
+  <li><strong>Phrase mode has 0 recorded samples</strong> in this checkout; it is rule-based until the team records <code>landmarks_phrases.csv</code>.</li>
+  <li>Letter data is <strong>borrowed ASL fingerspelling</strong>, not a custom Indian classroom corpus.</li>
+  <li>OTP is in-memory; Google Translate can fail; Hindi fallback is a small phrase list.</li>
+  <li>Privacy: landmarks can leave the machine when classifying/recording; raw video does not, in the current design.</li>
+</ul>
+<p><strong>Future work:</strong> two-hand MediaPipe; sequence models for J/Z; custom phrase dataset; text-to-sign reverse mode; stronger auth.</p>
+
+<h2>9. How to run and what to demo</h2>
+<pre>cd Vani-Setu
+./run.sh
+# Open http://127.0.0.1:5001
+# OTP is printed in the terminal if email is not configured</pre>
+<p>Health check: <code>curl -s http://127.0.0.1:5001/api/health</code> should show <code>ready_for_demo: true</code>.</p>
+<p><strong>Demo order:</strong> login → camera → ML MODEL badge → Spell L/V/W/B and confidence bar → two letters + suggestion chip → Practice 3 letters → Phrase Hello/Peace/OK → Hindi + Speak → optional Retrain → logout (LED off).</p>
+
+<h2 class="page-break">10. Viva questions and answers by member</h2>
+<p>Each person gets <strong>frontend, backend, and ML</strong> questions for their slice. Shared questions are in 10.1. Trick questions are in 10.5 — any of you may be asked those.</p>
+
+<h3>10.1 For everyone (30-second answers)</h3>
+<p class="q">Q. What is Vani-Setu?</p>
+<p class="a">A real-time web prototype that maps one-hand camera poses to text and speech, with optional translation. Spell letters use an SVM; phrases use rules.</p>
+<p class="q">Q. Did each of you only do one layer?</p>
+<p class="a">No. Each of us did frontend, backend, and ML on a different user journey (Spell live path / login-phrase-translate / record-train-practice).</p>
+<p class="q">Q. Is this deep learning?</p>
+<p class="a">Hand tracking uses MediaPipe (ML inside). Our letter classifier is a classical SVM on landmarks, not a CNN on images. The old Keras CNN is not the running demo.</p>
+<p class="q">Q. Why not send video to the cloud?</p>
+<p class="a">Privacy, latency, and a classroom demo. Only short JSON landmarks or text hit localhost / Translate.</p>
+
+<h3>10.2 Member 1 — Spell path (frontend + backend + ML)</h3>
+<p class="q">Frontend — What does MediaPipe return?</p>
+<p class="a">21 landmarks. Each has x, y (about 0–1 in the image) and z relative to the wrist. We draw joints on a canvas over the video.</p>
+<p class="q">Frontend — Why wait 9 of 14 frames?</p>
+<p class="a">To stop flicker. Without a vote, HELLO becomes HHEELLOO. Cooldown after commit stops repeats.</p>
+<p class="q">Frontend — What is the confidence bar?</p>
+<p class="a">The SVM’s <code>predict_proba</code> for the winning class, shown only in Spell. Phrase mode hides it because Phrase is not the letter model.</p>
+<p class="q">Backend — What does <code>/api/classify</code> receive and return?</p>
+<p class="a">JSON of 21 <code>{x,y,z}</code> points. Server builds the 63-D vector, calls <code>predict</code> / <code>predict_proba</code>, returns <code>label</code> and <code>confidence</code>. No video is uploaded.</p>
+<p class="q">Backend — What if the model file is missing?</p>
+<p class="a">Classify returns 404. The UI keeps using letter geometry rules so the demo still runs.</p>
+<p class="q">ML — Why 63 numbers, not a photo?</p>
+<p class="a">21 joints × 3 axes, wrist subtracted. Smaller than an image, less sensitive to background, enough for static fingerspelling, no GPU at demo time.</p>
+<p class="q">ML — Why 0.50 confidence?</p>
+<p class="a">Measured on held-out SVM probabilities: ~96% of correct predictions kept, ~69% of errors dropped, then frame voting filters the rest. Live camera accuracy is still not the same as 95.1% test accuracy.</p>
+<p class="q">ML — What model is running at classify time?</p>
+<p class="a">RBF SVM inside a <code>StandardScaler</code> pipeline, joblib file <code>sign_rf.joblib</code> (name is historical; the object is SVM).</p>
+
+<h3>10.3 Member 2 — Product path (frontend + backend + ML)</h3>
+<p class="q">Frontend — Walk through login.</p>
+<p class="a">Email → send OTP → six boxes → math CAPTCHA → <code>sessionStorage</code> flag. Classroom gate, not JWT production auth.</p>
+<p class="q">Frontend — Phrase vs Spell in the UI?</p>
+<p class="a">Phrase writes a whole word into the sentence. Spell appends a letter; Space finishes the word. ISL tab swaps the phrase rule table.</p>
+<p class="q">Frontend — How does Speak / translation appear?</p>
+<p class="a">Language tabs call <code>/api/translate</code>. Speak uses the Web Speech API on the English sentence (and translated text if another language is selected).</p>
+<p class="q">Backend — How does OTP work?</p>
+<p class="a">Six digits in a process dict, 300 s expiry, rate limit 60 s, max 5 tries. Empty SMTP → print code in the terminal. Restart Flask wipes OTPs.</p>
+<p class="q">Backend — How is translation done?</p>
+<p class="a"><code>GoogleTranslator</code> via deep-translator plus a small cache. If it fails and target is Hindi, use <code>OFFLINE_HI</code> in <code>signs.py</code>.</p>
+<p class="q">Backend — Why Flask?</p>
+<p class="a">sklearn is Python. Flask is a thin API around that. Django would be heavier for a prototype. Port 5001 avoids macOS AirPlay on 5000.</p>
+<p class="q">ML — Are Phrase and ISL “machine learning”?</p>
+<p class="a">They are a <em>hand-crafted classifier</em>: finger up/down plus distances. No weights. Still a valid method when you have no phrase dataset. MediaPipe underneath is ML.</p>
+<p class="q">ML — Why not put Hello into the SVM?</p>
+<p class="a">The SVM’s classes are A–Z. Adding Hello would mix tasks and wreck Spell accuracy. Phrase samples, if recorded, go to a separate CSV.</p>
+<p class="q">ML — Is your ISL real ISL?</p>
+<p class="a">No. One-hand classroom poses. Real ISL is two-handed and uses face and motion. We state that in limitations.</p>
+
+<h3>10.4 Member 3 — Data path (frontend + backend + ML)</h3>
+<p class="q">Frontend — How does recording work?</p>
+<p class="a">Pick a label, click Record, we POST landmarks every few frames. Spell writes letters; Phrase writes phrases. Counter aims at ~25 per sign.</p>
+<p class="q">Frontend — Practice mode and suggestions?</p>
+<p class="a">Practice prompts a random letter except J/Z and scores holds. Suggestions filter a local word list after two letters (HELLO, HELP, …). No LLM.</p>
+<p class="q">Frontend — Camera LED after stop server?</p>
+<p class="a">Flask does not own the webcam. We <code>stop()</code> tracks on logout/pagehide; the user must also close the tab.</p>
+<p class="q">Backend — Why two CSVs?</p>
+<p class="a">Letters → <code>landmarks.csv</code> for the SVM. Phrases → <code>landmarks_phrases.csv</code> so Hello never becomes an SVM class.</p>
+<p class="q">Backend — How does Retrain work?</p>
+<p class="a"><code>POST /api/train</code> runs <code>train_classifier.py</code>, 600 s timeout, lock so a second click gets 409, then reloads joblib in memory. No extra terminal.</p>
+<p class="q">Backend — What is <code>/api/health</code>?</p>
+<p class="a">Checks model loaded, <code>hand_landmarker.task</code> present, sample counts, translator import, email. <code>ready_for_demo</code> needs model + hand file.</p>
+<p class="q">ML — Why SVM over Random Forest?</p>
+<p class="a">Same features, same split: SVM 95.1% / 94.1% CV; RF 88.1%. Logistic was close (94%). We picked the measured winner. Trees overfit more here (74.6%).</p>
+<p class="q">ML — Train/test and F1?</p>
+<p class="a">25% test, stratified, seed 42. Accuracy is overall correct. Macro-F1 averages per letter so rare C is not hidden by many Zs. 5-fold CV checks luck of one split.</p>
+<p class="q">ML — Confusion matrix and J/Z?</p>
+<p class="a">Rows true, columns predicted. J and Z are motion letters; one static 63-D frame cannot encode a trace. Sequence models would be next.</p>
+<p class="q">ML — Did we collect the 2122 samples?</p>
+<p class="a">No. Public ASL Now landmarks (MIT), converted to our feature format. Our work is conversion, training, comparison, and the recorder for future own data.</p>
+
+<h3>10.5 Trick questions (any member)</h3>
+<p class="q">Q. Can this replace an ISL interpreter?</p>
+<p class="a">No. One hand, static poses, toy phrase set. Accessibility demo only.</p>
+<p class="q">Q. Where is the neural network?</p>
+<p class="a">Inside MediaPipe’s hand detector. Our decision layer is SVM + rules. Unused Keras scripts are prior art we did not run.</p>
+<p class="q">Q. Is 95.1% the live camera accuracy?</p>
+<p class="a">It is held-out accuracy on the landmark CSV. Live depends on lighting and pose match. Threshold + voting exist because live is harder.</p>
+
+<h2>11. References</h2>
+<ol>
+  <li>Zhang, F. et al. MediaPipe Hands. Google Research.</li>
+  <li>ASL Now Fingerspelling Landmarks — Hugging Face dataset AxelS27/asl-now-fingerspelling (MIT).</li>
+  <li>Cortes, C. &amp; Vapnik, V. Support-vector networks. <em>Machine Learning</em>, 1995.</li>
+  <li>Pedregosa et al. Scikit-learn: Machine Learning in Python. <em>JMLR</em>, 2011.</li>
+  <li>Original hackathon CNN: harshbg / Sign-Language-Interpreter-using-Deep-Learning (HackUNT-19).</li>
+  <li>Project repository: https://github.com/ShadowAN-AB/Vani_Setu</li>
+</ol>
+
+<div class="box">
+  <strong>Last checklist before you walk in</strong>
+  <ul>
+    <li>Names and roll numbers filled on the cover.</li>
+    <li>Each member can recite: “I did frontend, backend, and ML on my slice” plus the three bullets for that slice.</li>
+    <li><code>./run.sh</code> works; OTP appears in the terminal; camera allowed.</li>
+    <li>Any member can point at Figure 1; Member 3 leads why SVM won, Member 1 how it is used live.</li>
+    <li>All three say the limitations sentence: one hand, static poses, ASL letters, classroom ISL, not a certified interpreter.</li>
+  </ul>
+</div>
+<p class="footer-note">This report describes the college web iteration of Vani-Setu as of the SVM + practice/suggestions/retrain release. Fill member names on page 1 before submission.</p>
+
+</body>
+</html>
