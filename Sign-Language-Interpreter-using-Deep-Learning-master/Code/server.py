@@ -111,6 +111,9 @@ translation_cache = {}
 cache_lock = Lock()
 csv_lock = Lock()
 train_lock = Lock()
+# Protects (ml_model, ml_info) swaps so /api/classify never sees a non-None
+# model paired with a reset info dict (feature_version would silently default to 1).
+model_lock = Lock()
 MAX_CACHE_SIZE = 500
 ml_model = None       # the classifier (has predict_proba and classes_)
 ml_info = {}          # feature version, threshold and headline metrics saved by the trainer
@@ -136,7 +139,9 @@ def ensure_hand_landmarker():
 
 
 def load_ml_model():
-    """Load the trainer's bundle; an old bare pipeline still works with version-1 features."""
+    """Load the trainer's bundle; an old bare pipeline still works with version-1 features.
+    Writes to (ml_model, ml_info) are serialised through model_lock so /api/classify
+    always reads a consistent pair."""
     global ml_model, ml_info
     path = MODEL_PATH if os.path.exists(MODEL_PATH) else LEGACY_MODEL_PATH
     if not JOBLIB_OK or not os.path.exists(path):
@@ -145,21 +150,26 @@ def load_ml_model():
     try:
         obj = joblib.load(path)
         if isinstance(obj, dict) and "model" in obj:
-            ml_model = obj["model"]
-            ml_info = {
+            new_model = obj["model"]
+            new_info = {
                 "path": os.path.relpath(path, APP_DIR),
                 "feature_version": int(obj.get("feature_version", 1)),
                 "threshold": float(obj.get("threshold", DEFAULT_THRESHOLD)),
                 "metrics": obj.get("metrics", {}),
             }
         else:
-            ml_model = obj
-            ml_info = {"path": os.path.relpath(path, APP_DIR), "feature_version": 1,
-                       "threshold": DEFAULT_THRESHOLD, "metrics": {}}
+            new_model = obj
+            new_info = {"path": os.path.relpath(path, APP_DIR), "feature_version": 1,
+                        "threshold": DEFAULT_THRESHOLD, "metrics": {}}
+        # Swap atomically from the reader's point of view (see /api/classify snapshot).
+        with model_lock:
+            ml_model = new_model
+            ml_info = new_info
         print(f"  [OK] Loaded classifier: {ml_info['path']} (features v{ml_info['feature_version']})")
         suggester.set_confusion(obj.get("confusion") if isinstance(obj, dict) else None)
     except Exception as e:
-        ml_model, ml_info = None, {}
+        with model_lock:
+            ml_model, ml_info = None, {}
         print(f"  [WARN] Could not load model: {e}")
 
 
@@ -237,12 +247,39 @@ def offline_translate(text, target):
     return joined if joined and joined.lower() != text.lower() else None
 
 
-app = Flask(__name__, static_folder=APP_DIR)
+# static_folder=None: do NOT let Flask auto-serve this directory. The directory
+# contains users.db, .env, source and datasets. All browser-reachable files are
+# served through the explicit index + PUBLIC_FILES routes below.
+app = Flask(__name__, static_folder=None)
 CORS(app)
 ensure_hand_landmarker()
 init_db(app)
 load_ml_model()
 load_sign_models()
+
+
+def _bad(message, code=400, **extra):
+    """Uniform error-response shape so the frontend's await res.json() never
+    receives Flask's default HTML page."""
+    body = {"success": False, "message": str(message)}
+    body.update(extra)
+    return jsonify(body), code
+
+
+@app.errorhandler(404)
+def _handle_404(e):
+    return _bad("Not found", 404)
+
+
+@app.errorhandler(405)
+def _handle_405(e):
+    return _bad("Method not allowed", 405)
+
+
+@app.errorhandler(500)
+def _handle_500(e):
+    # Do not leak internals to the client; the server log keeps the traceback.
+    return _bad("Server error", 500)
 
 
 @app.route("/")
@@ -294,7 +331,12 @@ def register():
     user = User(email=email)
     user.set_password(password)
     db.session.add(user)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        # Second thread wins the race; the first already created the account.
+        db.session.rollback()
+        return _bad("That email is already registered. Sign in instead.", 409)
     return jsonify({"success": True, "message": "Account created. You are signed in.", "email": user.email})
 
 
@@ -322,9 +364,21 @@ def send_otp():
     if not data or "email" not in data:
         return jsonify({"success": False, "message": "Email is required"}), 400
 
-    email = data["email"].strip().lower()
-    if not re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email):
+    email = str(data.get("email") or "").strip().lower()
+    if not _valid_email(email):
         return jsonify({"success": False, "message": "Invalid email format"}), 400
+
+    # OTP is only available when the deploy opts into it. In password-only mode
+    # the endpoint is a no-op; without this gate anyone could trigger a code for
+    # any address (and read it from the console on an SMTP-less server).
+    if AUTH_MODE not in ("otp", "guest"):
+        return jsonify({"success": False, "message": "OTP login is disabled"}), 403
+
+    # Only send a code for emails that already have an account. Otherwise send_otp
+    # is a self-service registration under a login button, which it is not.
+    if not User.query.filter_by(email=email).first():
+        # Deliberately generic - do not leak which emails are registered.
+        return jsonify({"success": False, "message": "No account for that email"}), 404
 
     with store_lock:
         cleanup_expired()
@@ -356,8 +410,15 @@ def verify_otp():
     if not data or "email" not in data or "otp" not in data:
         return jsonify({"success": False, "message": "Email and OTP are required"}), 400
 
-    email = data["email"].strip().lower()
-    user_otp = data["otp"].strip()
+    email = str(data.get("email") or "").strip().lower()
+    user_otp = str(data.get("otp") or "").strip()
+
+    if AUTH_MODE not in ("otp", "guest"):
+        return jsonify({"success": False, "message": "OTP login is disabled"}), 403
+    if not _valid_email(email):
+        return jsonify({"success": False, "message": "Invalid email format"}), 400
+    if not User.query.filter_by(email=email).first():
+        return jsonify({"success": False, "message": "No account for that email"}), 404
 
     with store_lock:
         cleanup_expired()
@@ -384,9 +445,9 @@ def translate_text():
     if not data or "text" not in data or "target" not in data:
         return jsonify({"success": False, "message": "text and target language are required"}), 400
 
-    text = data["text"].strip()
-    target = data["target"].strip()
-    source = data.get("source", "en").strip()
+    text = str(data.get("text") or "").strip()
+    target = str(data.get("target") or "").strip()
+    source = str(data.get("source") or "en").strip()
 
     if not text:
         return jsonify({"success": True, "translated": "", "source": "empty"})
@@ -517,13 +578,15 @@ def collect_sample():
     try:
         with csv_lock:
             hands = dataset.parse_hands(data)
-            dataset.append_recording(label, hands, kind=kind,
-                                     signer=data.get("signer", ""), split=data.get("split", ""))
+            row = dataset.append_recording(label, hands, kind=kind,
+                                            signer=data.get("signer", ""), split=data.get("split", ""))
             count = dataset.counts(kind)
             label_count = dataset.counts(kind, label)
     except ValueError as e:
-        return jsonify({"success": False, "message": str(e)}), 400
+        return _bad(str(e), 400)
 
+    # Report the split actually written, not a separately-recomputed one.
+    # (data.append_recording strips+lowercases; the old inline recompute did not.)
     return jsonify({
         "success": True,
         "samples": count,
@@ -531,7 +594,7 @@ def collect_sample():
         "label": label,
         "kind": kind,
         "hands": len(hands),
-        "split": "test" if str(data.get("split", "")).lower() == "test" else "train",
+        "split": row.get("split") or "train",
         "target": TARGET_SAMPLES_PER_LABEL,
         "path": os.path.relpath(dataset.RECORDINGS_CSV, APP_DIR),
     })
@@ -559,13 +622,19 @@ def train_model():
             report = os.path.join(APP_DIR, "reports", f"nn_{kind}.json")
         proc = subprocess.run(cmd, cwd=APP_DIR, capture_output=True, text=True, timeout=900)
         if proc.returncode != 0:
-            lines = [l for l in (proc.stdout + "\n" + proc.stderr).strip().splitlines() if l.strip()]
+            out = (proc.stdout or "") + "\n" + (proc.stderr or "")
+            lines = [l for l in out.strip().splitlines() if l.strip()]
             message = lines[-1] if lines else "Training failed"
-            if proc.returncode == 2 and "TensorFlow" in proc.stdout:
-                message = "Training the neural network needs TensorFlow: pip install -r requirements_train.txt"
-            elif "No " in proc.stdout and "samples yet" in proc.stdout:
-                message = f"No {kind} samples yet. Record some first."
-            return jsonify({"success": False, "message": message}), 500
+            # Precondition failures are 422 (unprocessable), not 500 (server crash):
+            # "no samples yet" and "no TensorFlow" are perfectly ordinary states
+            # on a fresh clone or a web-only server.
+            if proc.returncode == 2 and "TensorFlow" in out:
+                return _bad("Training the neural network needs TensorFlow: pip install -r requirements_train.txt", 422)
+            if ("samples yet" in out) or ("No letter samples found" in out):
+                return _bad(f"No {kind} samples yet. Record some first.", 422)
+            if "Need at least two" in out:
+                return _bad(message, 422)
+            return _bad(message, 500)
 
         load_ml_model()
         load_sign_models()
@@ -615,15 +684,22 @@ def classify_landmarks():
     if mode in SIGN_MODEL_PATHS:
         model = sign_models.get(mode)
         if model is None:
-            return jsonify({"success": False, "message": f"No {mode} network trained yet"}), 404
+            return _bad(f"No {mode} network trained yet", 404)
         feats = hands_to_two_hand_features(hands)
         threshold = model.threshold
     else:
-        model = ml_model
+        # Grab a consistent snapshot of (model, feature_version, threshold) under
+        # model_lock. Without this, /api/train can rebind ml_model and ml_info
+        # separately while a classify request is mid-flight, pairing a new
+        # model with the OLD/empty info dict (feature_version defaults to 1 ->
+        # a 63-length vector into an 88-feature pipeline -> sklearn ValueError).
+        with model_lock:
+            model = ml_model
+            fv = int((ml_info or {}).get("feature_version", 1))
+            threshold = float((ml_info or {}).get("threshold", DEFAULT_THRESHOLD))
         if model is None:
-            return jsonify({"success": False, "message": "No trained model yet. Run train_classifier.py"}), 404
-        feats = landmarks_to_features(hands[0][0], ml_info.get("feature_version", 1))
-        threshold = ml_info.get("threshold", DEFAULT_THRESHOLD)
+            return _bad("No trained model yet. Run train_classifier.py", 404)
+        feats = landmarks_to_features(hands[0][0], fv)
 
     try:
         # The label always comes from the highest probability, so the label and

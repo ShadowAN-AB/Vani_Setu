@@ -467,6 +467,7 @@
     .mode-badge { top: 14px; left: 14px; }
     .mode-badge.phrase { color: var(--teal-deep); }
     .mode-badge.spell { color: var(--sky); }
+    .mode-badge.isl { color: var(--saffron); }
     .hand-badge { bottom: 14px; right: 14px; }
     .hand-badge.ok { color: var(--success); }
     .hand-badge.none { color: var(--danger); }
@@ -980,7 +981,7 @@
           <div class="cam-area" id="camArea">
             <video id="webcam" autoplay playsinline muted></video>
             <canvas id="canvas"></canvas>
-            <div class="cam-badge mode-badge phrase" id="modeBadge">PHRASE</div>
+            <div class="cam-badge mode-badge spell" id="modeBadge">SPELL</div>
             <div class="cam-badge hand-badge none" id="handBadge">NO HAND</div>
             <div class="fps-badge" id="fpsBadge">-- FPS</div>
           </div>
@@ -994,8 +995,8 @@
             </div>
             <div class="mode-toggle-row">
               <div class="mode-pill">
-                <button class="pill-opt active-phrase" id="pillPhrase">PHRASE</button>
-                <button class="pill-opt" id="pillSpell">SPELL</button>
+                <button class="pill-opt" id="pillPhrase">PHRASE</button>
+                <button class="pill-opt active-spell" id="pillSpell">SPELL</button>
               </div>
             </div>
             <div class="collect-bar">
@@ -1306,13 +1307,19 @@ class LoginController {
     document.getElementById('signInBtn').onclick = () => this.passwordAuth(false);
     document.getElementById('registerBtn').onclick = () => this.passwordAuth(true);
     document.getElementById('emailInput').addEventListener('keydown', e => {
-      if (e.key === 'Enter') {
-        if (document.getElementById('passwordWrap').style.display !== 'none') this.passwordAuth(false);
-        else this.sendOtp();
+      if (e.key !== 'Enter') return;
+      if (document.getElementById('passwordWrap').style.display !== 'none') {
+        const btn = document.getElementById('signInBtn');
+        if (!btn || !btn.disabled) this.passwordAuth(false);
+      } else {
+        const btn = document.getElementById('sendOtpBtn');
+        if (!btn || !btn.disabled) this.sendOtp();
       }
     });
     document.getElementById('passwordInput').addEventListener('keydown', e => {
-      if (e.key === 'Enter') this.passwordAuth(false);
+      if (e.key !== 'Enter') return;
+      const btn = document.getElementById('signInBtn');
+      if (!btn || !btn.disabled) this.passwordAuth(false);
     });
     const guestBtn = document.getElementById('guestBtn');
     if (guestBtn) guestBtn.onclick = () => this.enterAsGuest();
@@ -1684,7 +1691,7 @@ const S_INFO = {
 // ==============================
 class ASL {
   constructor() {
-    this.mode = 'PHRASE'; this.lang = 'ASL'; this.buf = []; this.mx = 14; this.thr = 9;
+    this.mode = 'SPELL'; this.lang = 'ASL'; this.buf = []; this.mx = 14; this.thr = 9;
     this.cd = 0; this.cdm = 22; this.disp = '?';
     this.fg = [false, false, false, false, false];
     // Holding one sign types it once: the same sign is accepted again only after the
@@ -1743,8 +1750,9 @@ class ASL {
     if (n === 2) { if (T && I) return "Help"; if (I && M) return "You"; }
     if (n === 1) { if (T) return "Yes"; if (I) return "Me"; }
     if (n === 0) return "No";
-    if (n === 1 && T) return "Good";
-    if (tc && (n === 3 || n === 4)) return "Please";
+    // Earlier blocks already return for every reachable n, so this is the only
+    // fallback. ISL "Good" shares its hand shape with "Yes" and the Dictionary
+    // notes that honestly - the rules cannot distinguish the two.
     return '?';
   }
   update(l, forced = null) {
@@ -1819,6 +1827,13 @@ class App {
     // the validation set and the server sends it with /api/model-status (0.50 is a fallback).
     this.ML_MIN_CONF = 0.50;
     this.quiz = null;
+    // Loop + camera lifecycle. _loopGen increments every stopCamera(); the
+    // rAF callback checks its generation against this and bails if a newer
+    // loop has started. _starting prevents a double-click opening two streams.
+    this._loopGen = 0;
+    this._starting = false;
+    this._mlStamp = 0;         // bumped on every classify response
+    this._lastPushedStamp = 0; // what the vote buffer most recently saw
   }
 
   async init() {
@@ -1835,6 +1850,11 @@ class App {
   }
 
   onLogin(email) {
+    // Idempotency guard - the Enter key in the login form used to let the
+    // user double-submit, which registered every key handler twice. One
+    // path is enough; later calls are no-ops.
+    if (this._booted) return;
+    this._booted = true;
     document.getElementById('loginView').classList.add('hidden');
     document.getElementById('translatorView').classList.remove('hidden');
 
@@ -1954,13 +1974,39 @@ class App {
     try {
       const res = await fetch('/api/dictionary');
       const data = await res.json();
-      if (data.success) this.dictionary = data.dictionary;
-    } catch (e) { /* the old short guide is used instead */ }
+      if (data.success) {
+        this.dictionary = data.dictionary;
+        this._buildInfoMaps();
+      }
+    } catch (e) { /* the hardcoded short labels below are used instead */ }
+  }
+
+  // Dictionary payload has ALL 26 letters + every phrase. Turn each entry's
+  // "how" sentence into a short badge line, so the live sign-description area
+  // is never empty (S_INFO only covers 14 letters). Falls back to S_INFO/P_INFO/I_INFO
+  // when dictionary load has not completed yet.
+  _buildInfoMaps() {
+    const dict = this.dictionary || {};
+    const short = (how) => (how || '').split('.')[0].slice(0, 72);
+    this._letterInfo = {};
+    (dict.letter || []).forEach(e => { this._letterInfo[e.sign] = short(e.how); });
+    this._phraseInfo = {};
+    (dict.phrase || []).forEach(e => { this._phraseInfo[e.sign] = short(e.how); });
+    this._islInfo = {};
+    (dict.isl || []).forEach(e => { this._islInfo[e.sign] = short(e.how); });
+  }
+
+  _infoFor(sign) {
+    // Current-mode specific lookup, dictionary first, then the hardcoded fallback.
+    if (this.asl.mode === 'SPELL') return (this._letterInfo && this._letterInfo[sign]) || S_INFO[sign];
+    if (this.asl.lang === 'ISL') return (this._islInfo && this._islInfo[sign]) || I_INFO[sign];
+    return (this._phraseInfo && this._phraseInfo[sign]) || P_INFO[sign];
   }
 
   // Close the dictionary and switch to the screen where this sign is recognised
   tryDictSign(tab, sign) {
     this.toggleGuide(false);
+    if (this.quiz) this.stopQuiz();
     const wantSpell = tab === 'letter';
     if ((this.asl.mode === 'SPELL') !== wantSpell) this.doMode();
     if (!wantSpell) this.setInputLang(tab === 'isl' ? 'ISL' : 'ASL');
@@ -2125,13 +2171,18 @@ class App {
   async retrainModel() {
     const btn = document.getElementById('btnTrain');
     if (btn.disabled) return;
+    const kind = this.currentKind();
+    if (kind !== 'letter') {
+      // Phrase and ISL are rule-based in this build (no recorded samples, no NN).
+      // Say so, instead of firing an optimistic "takes about a minute..." toast
+      // followed by the server's 500.
+      showToast('Phrase and ISL use hand-written rules in this build. Train the SVM from the SPELL screen.', 'info', 5000);
+      return;
+    }
     btn.disabled = true;
     const label = btn.textContent;
     btn.textContent = 'Training…';
-    const kind = this.currentKind();
-    showToast(kind === 'letter'
-      ? 'Training the letter classifier (SVM), this takes about half a minute…'
-      : `Training the ${kind === 'isl' ? 'ISL' : 'phrase'} neural network, this takes about a minute…`, 'info', 6000);
+    showToast('Training the letter classifier (SVM), this takes about half a minute…', 'info', 6000);
     try {
       const res = await fetch('/api/train', {
         method: 'POST',
@@ -2239,7 +2290,10 @@ class App {
     document.querySelectorAll('#inputLangRow .lang-tab[data-input]').forEach(tab => {
       tab.classList.toggle('active', tab.dataset.input === lang);
     });
+    if (this.quiz) this.stopQuiz();
+    this.resetMl();
     this.fillCollectLabels();
+    this.updateModelPill();
     showToast(`Input language: ${lang}`, 'info', 1800);
     this.log('Switched to ' + lang, 'letter');
   }
@@ -2269,6 +2323,16 @@ class App {
     pill.classList.toggle('on', on);
   }
 
+  // Reset every bit of state the live classifier wrote, so the UI never
+  // keeps a stale label/confidence after a mode or language switch.
+  resetMl() {
+    this._mlLabel = null; this._mlTop = null; this._mlKind = null;
+    this._mlConf = 0; this._mlMs = 0; this._mlBusy = false;
+    this._mlStamp = 0; this._lastPushedStamp = 0;
+    const row = document.getElementById('confRow');
+    if (row) row.style.display = 'none';
+  }
+
   async refreshModelStatus() {
     try {
       const res = await fetch('/api/model-status');
@@ -2287,12 +2351,28 @@ class App {
       });
       if (!this.trainingEnabled) document.getElementById('collectStat').textContent = 'Recording is available when running locally';
     } catch (e) {
+      // Server unreachable. The UI must not keep insisting a model is loaded or
+      // training is possible; otherwise the loop keeps POSTing /api/classify
+      // against a dead server and the pill lies about state.
       this.mlReady = false;
+      this.signModels = {};
+      this.trainingEnabled = false;
+      this.resetMl();
+      this.updateModelPill();
+      ['btnRecord', 'btnTrain', 'collectLabel', 'collectHint', 'collectSigner', 'collectTest'].forEach(id => {
+        const el = document.getElementById(id);
+        const target = id === 'collectTest' ? el && el.parentElement : el;
+        if (target) target.style.display = 'none';
+      });
     }
   }
 
   toggleRecord() {
     const signerInput = document.getElementById('collectSigner');
+    if (!this.collecting && (!this.vid || !this.vid.srcObject)) {
+      showToast('Start the camera first, then record a sample.', 'error', 4000);
+      return;
+    }
     if (!this.collecting && !signerInput.value.trim()) {
       showToast('Type the signer\'s name first, so their samples can be kept apart for testing', 'error', 3500);
       signerInput.focus();
@@ -2363,28 +2443,81 @@ class App {
         this.vid.srcObject = null;
       }
     } catch (e) { /* ignore */ }
-    this._mlLabel = null;
-    this._mlConf = 0;
+    // Bump the generation so any still-queued rAF frame recognises itself as stale.
+    this._loopGen = (this._loopGen | 0) + 1;
+    this.resetMl();
+    if (this.asl) this.asl.reset();
+    this.flash = 0; this.fpsVal = 0; this.fpsFrames = 0;
   }
 
   async cam() {
+    if (this._starting) return;                     // guard against double-click
+    this._starting = true;
+    let stream = null;
     try {
-      this.stopCamera();
-      const s = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' } });
-      this.vid = document.getElementById('webcam'); this.vid.srcObject = s; await this.vid.play();
-      this.cvs = document.getElementById('canvas');
-      this.cvs.width = this.vid.videoWidth || 640; this.cvs.height = this.vid.videoHeight || 480;
-      this.cx = this.cvs.getContext('2d');
+      this.stopCamera();                            // bumps _loopGen, releases prior stream
+      // Hide the overlay immediately so a second click does not reach this handler.
       document.getElementById('permOverlay').classList.add('gone');
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
+      });
+      this.vid = document.getElementById('webcam');
+      this.vid.srcObject = stream;
+      // Wait for real metadata before measuring the canvas - .play() can resolve
+      // with videoWidth=0 on some browsers and the landmark overlay then drifts.
+      if (!this.vid.videoWidth) {
+        await new Promise(res => this.vid.addEventListener('loadedmetadata', res, { once: true }));
+      }
+      await this.vid.play();
+      this.cvs = document.getElementById('canvas');
+      this.cvs.width = this.vid.videoWidth || 640;
+      this.cvs.height = this.vid.videoHeight || 480;
+      this.cx = this.cvs.getContext('2d');
       document.getElementById('transBody').style.opacity = '1';
-      this.loop();
+      // Notice when the OS or user yanks the camera - unplug, Zoom grab, revoke.
+      stream.getVideoTracks().forEach(t => {
+        t.onended = () => {
+          showToast('Camera disconnected. Click Start camera to retry.', 'error', 6000);
+          this.stopCamera();
+          const ov = document.getElementById('permOverlay');
+          if (ov) ov.classList.remove('gone');
+        };
+      });
+      const gen = ++this._loopGen;                  // start fresh generation for this loop
+      this.loop(gen);
     } catch (e) {
-      showToast('Camera access needed. Please allow and reload.', 'error');
+      // If getUserMedia succeeded but something later threw, release the stream.
+      if (stream) try { stream.getTracks().forEach(t => t.stop()); } catch (_) {}
+      let msg = 'Camera access needed. Click Start camera and allow when prompted.';
+      if (e && e.name === 'NotFoundError') msg = 'No camera found on this device.';
+      else if (e && e.name === 'NotReadableError') msg = 'Camera is being used by another app (Zoom, OBS...). Close it and try again.';
+      else if (e && e.name === 'NotAllowedError') msg = 'Camera permission was denied. Allow it in the browser and reload.';
+      else if (e && e.name === 'AbortError') msg = 'Could not start the camera. Try again.';
+      showToast(msg, 'error', 6000);
+      const ov = document.getElementById('permOverlay');
+      if (ov) ov.classList.remove('gone');          // let the user try again
+    } finally {
+      this._starting = false;
     }
   }
 
-  loop() {
+  loop(gen) {
+    // Multiple rAF chains must not coexist. Bail if a newer stopCamera()/cam()
+    // has started a different generation. Also handle the camera dying mid-loop.
+    if (gen !== this._loopGen) return;
     if (!this.vid || !this.vid.srcObject) return;
+    try {
+      this._loopBody(gen);
+    } catch (err) {
+      console.error('camera loop crashed', err);
+      showToast('Camera loop crashed. Click Start camera to retry.', 'error', 6000);
+      this.stopCamera();
+      const ov = document.getElementById('permOverlay');
+      if (ov) ov.classList.remove('gone');
+    }
+  }
+
+  _loopBody(gen) {
     const r = this.hl.detectForVideo(this.vid, performance.now());
     this.cx.clearRect(0, 0, this.cvs.width, this.cvs.height);
     let sign = '?', com = null, ok = false;
@@ -2413,17 +2546,25 @@ class App {
             this._mlTop = result.label;
             this._mlConf = result.confidence;
             this._mlKind = result.kind;
+            this._mlStamp = (this._mlStamp | 0) + 1;   // mark this as a fresh result
           }
         }).finally(() => { this._mlBusy = false; });
       }
-      // Ignore a result that belongs to the previous screen (e.g. a letter after switching to Phrase)
-      const forced = useMl && this._mlKind === kind ? this._mlLabel : null;
+      // Only forward a classify RESULT once. On every subsequent frame until the
+      // next response arrives, vote '?' so the 14-frame temporal buffer actually
+      // measures "the hand held this sign for ~1 s", not "the request round-trip
+      // was slow enough to look like 1 s".
+      let forced = '?';
+      if (useMl && this._mlKind === kind && this._mlStamp !== this._lastPushedStamp) {
+        forced = this._mlLabel;
+        this._lastPushedStamp = this._mlStamp;
+      } else if (!useMl) {
+        forced = null;    // let the rule path produce the vote itself
+      }
       [com, sign] = this.asl.update(lm, forced);
     } else {
       this.asl.reset();
-      this._mlLabel = null;
-      this._mlTop = null;
-      this._mlConf = 0;
+      this.resetMl();
     }
 
     if (com) {
@@ -2452,7 +2593,7 @@ class App {
     }
 
     this.ui(sign, ok);
-    requestAnimationFrame(() => this.loop());
+    requestAnimationFrame(() => this.loop(gen));
   }
 
   draw(lm) {
@@ -2491,11 +2632,13 @@ class App {
     st.className = 'sign-text' + (sign !== '?' && ok ? ' lit' : '');
     sc.classList.toggle('active', sign !== '?' && ok);
     if (this.flash === 14) { st.classList.remove('commit-pop'); void st.offsetWidth; st.classList.add('commit-pop'); }
-    const info = this.asl.mode === 'SPELL' ? S_INFO : (this.asl.lang === 'ISL' ? I_INFO : P_INFO);
-    sd.textContent = info[sign] || (sign === '?' ? 'Show your hand to begin' : '');
+    sd.textContent = this._infoFor(sign) || (sign === '?' ? 'Show your hand to begin' : '');
     document.getElementById('camArea').classList.toggle('flash-border', this.flash > 10);
     const mb = document.getElementById('modeBadge');
-    mb.textContent = this.asl.mode; mb.className = 'cam-badge mode-badge ' + (this.asl.mode === 'PHRASE' ? 'phrase' : 'spell');
+    // SPELL / PHRASE (ASL) / ISL - the old code could never surface ISL
+    const badgeText = this.asl.mode === 'SPELL' ? 'SPELL' : (this.asl.lang === 'ISL' ? 'ISL' : 'PHRASE');
+    const badgeCls = this.asl.mode === 'SPELL' ? 'spell' : (this.asl.lang === 'ISL' ? 'isl' : 'phrase');
+    mb.textContent = badgeText; mb.className = 'cam-badge mode-badge ' + badgeCls;
     const hb = document.getElementById('handBadge');
     hb.textContent = ok ? 'TRACKING' : 'NO HAND'; hb.className = 'cam-badge hand-badge ' + (ok ? 'ok' : 'none');
     this.asl.fg.forEach((on, i) => document.getElementById('f' + i).classList.toggle('on', on));
@@ -2537,8 +2680,10 @@ class App {
   doMode() {
     const m = this.asl.toggle();
     if (m === 'PHRASE' && this.word) { this.sentence += (this.sentence ? ' ' : '') + this.word; this.word = ''; this.words++; }
-    this._mlLabel = null;
+    if (this.quiz) this.stopQuiz();        // Practice is SPELL-only; a mode flip must stop it (A11)
+    this.resetMl();                        // every classify value is for the OLD screen (A5)
     this.fillCollectLabels();
+    this.updateModelPill();
     this.log('Switched to ' + m + ' mode', 'letter');
   }
   doSpace() {
@@ -2577,7 +2722,8 @@ class App {
       if (this.word) this.words++;
       this.log('Sentence: "' + s + '"', 'sentence');
       this.voice.speak(s); this.sentence = ''; this.word = '';
-    }
+        if (this.translator) this.translator.onTextChanged(this.getFullText() || '');
+  }
   }
 }
 
