@@ -32,10 +32,6 @@ class NumpyMLP:
     def threshold(self):
         return float(self.info.get("threshold", 0.5))
 
-    @property
-    def features(self):
-        return self.info.get("features", "v2")
-
     def predict_proba(self, x):
         z = (np.atleast_2d(np.asarray(x, dtype=np.float64)) - self.mean) / self.scale
         for i, (W, b) in enumerate(self.weights):

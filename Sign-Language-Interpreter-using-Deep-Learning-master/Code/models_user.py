@@ -23,10 +23,6 @@ class User(db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
-    def to_public(self):
-        return {"id": self.id, "email": self.email}
-
-
 def database_uri(app_dir):
     """Use DATABASE_URL on a host (Postgres). Otherwise a local SQLite file."""
     url = os.environ.get("DATABASE_URL", "").strip()

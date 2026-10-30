@@ -85,11 +85,6 @@ def catalog():
     }
 
 
-def all_train_labels():
-    labels = set(ASL_PHRASES) | set(ISL_PHRASES) | set(SPELL_LETTERS)
-    return sorted(labels)
-
-
 # ---------------------------------------------------------------------------
 # Dictionary: how to make every sign, in English and Hindi (shown in the app's
 # Dictionary). Letters are standard ASL fingerspelling; their drawings come from

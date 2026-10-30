@@ -11,7 +11,7 @@
 |------|----------|
 | `raw_asl_now/` (not in git) | The original dataset: one JSON file per sample, 21 points (x, y, z) |
 | `asl_now_landmarks.csv` (in git) | The same 2,122 samples as raw points, built by `build_dataset.py` |
-| `recordings/samples.csv` (in git) | Samples the team records in the app, with signer name, hand and split |
+| `recordings/samples.csv` (created on first recording; gitignored by default) | Samples the team records in the app, with signer name, hand and split |
 | `landmarks.csv` (old, not in git) | Pre-computed 63-D features used before October 2026; kept only so `experiments_m2.py` reproduces the Milestone 2 numbers |
 
 The Hugging Face page lists 44,562 rows because it counts each landmark point:

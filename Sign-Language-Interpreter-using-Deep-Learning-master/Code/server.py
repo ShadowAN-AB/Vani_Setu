@@ -24,7 +24,7 @@ from features import hands_to_two_hand_features, landmarks_to_features
 from nn.numpy_mlp import NumpyMLP
 from suggest import Suggester
 from models_user import User, db, init_db
-from signs import OFFLINE_HI, catalog, dictionary
+from signs import OFFLINE_HI, dictionary
 
 try:
     from dotenv import load_dotenv
@@ -64,7 +64,7 @@ TARGET_SAMPLES_PER_LABEL = 25
 
 # Only these files are served from the app folder. Everything else in it
 # (users.db, .env, datasets, source code) must never be downloadable.
-PUBLIC_FILES = {"index.html", "hand_landmarker.task", "favicon.ico"}
+PUBLIC_FILES = {"index.html", "hand_landmarker.task"}
 
 
 def _on_paas():
@@ -487,16 +487,6 @@ def translate_text():
         translation_cache[cache_key] = translated
 
     return jsonify({"success": True, "translated": translated, "source": used})
-
-
-@app.route("/api/languages", methods=["GET"])
-def get_languages():
-    return jsonify({"success": True, "languages": SUPPORTED_LANGUAGES})
-
-
-@app.route("/api/signs", methods=["GET"])
-def get_signs():
-    return jsonify({"success": True, "catalog": catalog()})
 
 
 def _load_sign_shapes():

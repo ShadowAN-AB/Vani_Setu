@@ -34,7 +34,7 @@ Day to day, run it on **localhost** at `http://127.0.0.1:5001` (`./run.sh`). The
 | Area | Change |
 |------|--------|
 | **Letter model** | 88 features instead of 63 (palm-length scaling, 10 fingertip distances, 15 joint angles); training data augmented with mirrored, tilted and jittered copies; 70 / 15 / 15 split with C and γ tuned on validation. **96.9%** test accuracy, **97.1% ± 1.6%** cross-validation. |
-| **Robustness** | With the other hand the old model fell to 64.3%; the new one scores 97.2%. Tilted 15°: 78.4% → 96.9%. Hand farther away: 72.1% → 97.2%. |
+| **Robustness** | With the other hand the old model fell to 64.3%; the new one scores 96.9%. Tilted 15°: 78.4% → 96.2% (−15°: 94.7%). Hand 40% smaller: 72.1% → 96.9%. All numbers from `reports/metrics.json`. |
 | **Neural networks** | Keras MLP (Dense 128 → 64, ReLU, dropout, softmax) for letters, ASL phrases and ISL signs. Weights are exported and run with NumPy, so the server needs no TensorFlow. |
 | **Two hands** | MediaPipe tracks two hands; phrase and ISL samples keep both, with their Left / Right label (181 features). |
 | **Word prediction** | Noisy-channel model: word frequency × how often the classifier confuses letters, so X-E-D still suggests RED. |
@@ -54,16 +54,17 @@ All on the same held-out test set (319 samples, 26 letters). Full report: [`repo
 
 | Test condition | First version (63 features) | Current (88 features + augmentation) |
 |----------------|-----------------------------|--------------------------------------|
-| Normal | 92.8% | 97.2% |
-| Other hand (mirrored) | 64.3% | 97.2% |
-| Tilted 15° | 78.4% | 96.9% |
-| Hand 40% smaller (farther away) | 72.1% | 97.2% |
+| Normal | 92.8% | 96.9% |
+| Other hand (mirrored) | 64.3% | 96.9% |
+| Tilted +15° | 78.4% | 96.2% |
+| Tilted −15° | — | 94.7% |
+| Hand 40% smaller (farther away) | 72.1% | 96.9% |
 
 ![Before and after](Sign-Language-Interpreter-using-Deep-Learning-master/Code/reports/eval_before_after.png)
 
 | Model (same data and features) | Test accuracy |
 |--------------------------------|---------------|
-| **SVM, RBF kernel** (used for letters) | **97.2%** (tuned live model: 96.9%) |
+| **SVM, RBF kernel** (used for letters) | 97.2% in `compare_models.py` (fixed C/γ, same split for all models); **96.9%** for the live tuned model in `reports/metrics.json` |
 | MLP neural network | 96.2% (Keras version: 95.9%) |
 | Random Forest | 96.2% |
 | Logistic Regression | 95.9% |
@@ -102,7 +103,7 @@ Flask API ──► SVM, 88 features (Spell)
 
 | Mode | What happens |
 |------|----------------|
-| **Spell** | Fingerspelling A–Z. An RBF **SVM** classifies 88 landmark features (**96.9%** test accuracy, 97.1% ± 1.6% 5-fold CV, and about 97% when the hand is mirrored, tilted or farther away). |
+| **Spell** | Fingerspelling A–Z. An RBF **SVM** classifies 88 landmark features (**96.9%** test accuracy, 97.1% ± 1.6% 5-fold CV, and 94–97% under the mirror / tilt / scale stress tests in `reports/metrics.json`). |
 | **Phrase** | Whole signs such as Hello, Yes, OK. A Keras **MLP neural network** on both hands (181 features) once phrase samples are recorded and trained; hand-written finger rules until then. |
 | **ISL** | Indian signs (Namaste, Thank You, Water, Help, …), one or two hands. Same neural network approach with its own model; rules as the fallback. Not a certified ISL lexicon. |
 | **Practice** | The app prompts a letter and scores your attempts. |

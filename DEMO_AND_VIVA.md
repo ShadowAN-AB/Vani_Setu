@@ -43,7 +43,7 @@ model without restarting the server.
 7. **Phrase** / **ISL** → rule-based poses (record your own samples for the report)  
 8. Translate the sentence into Hindi + Speak  
 9. **Dictionary** — how to make every letter and sign, in English or Hindi  
-9. **Retrain model** button — trains and hot-reloads without a terminal  
+9. **Retrain model** button on the Spell screen — trains the SVM and hot-reloads without a terminal (Phrase/ISL use rules; the button says so)  
 
 ## Pre-demo health check
 
@@ -63,7 +63,7 @@ curl -s http://127.0.0.1:5001/api/health
 - [ ] Click **Practice**, sign 3–4 prompted letters, show the score and streak  
 - [ ] Switch to Phrase: Hello / Peace / OK  
 - [ ] Switch language (e.g. Hindi) and Speak  
-- [ ] Click **Retrain model** to show training runs from the browser  
+- [ ] Switch to **SPELL** first, then click **Retrain model** to show training runs from the browser (PHRASE and ISL are rule-based in this build; the button will say so instead of training)  
 - [ ] Open the Dictionary, switch to हिन्दी, and press **Try it** on a letter  
 - [ ] Logout (camera LED should turn off)
 

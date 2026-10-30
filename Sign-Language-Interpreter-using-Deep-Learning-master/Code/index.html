@@ -216,7 +216,7 @@
       letter-spacing: 0.1em; text-transform: uppercase;
       color: var(--muted); margin-bottom: 8px;
     }
-    .form-input, .captcha-input, .lang-dropdown-search, .collect-bar select {
+    .form-input, .captcha-input, .collect-bar select {
       width: 100%; padding: 13px 14px;
       border-radius: var(--radius-sm);
       border: 1px solid var(--line);
@@ -226,7 +226,7 @@
       font-size: 15px; font-weight: 500;
       outline: none; transition: border-color 0.2s, background 0.2s;
     }
-    .form-input:focus, .captcha-input:focus, .lang-dropdown-search:focus {
+    .form-input:focus, .captcha-input:focus {
       border-color: var(--teal);
       background: #fff;
     }
@@ -265,7 +265,7 @@
     }
     .captcha-refresh:hover { background: var(--paper-deep); transform: rotate(90deg); }
 
-    .btn-primary, .btn-send-otp, .cam-start-btn, .ctrl-btn, .pill-opt, .lang-more-btn {
+    .btn-primary, .btn-send-otp, .cam-start-btn, .ctrl-btn, .pill-opt {
       font-family: var(--font); cursor: pointer; transition: transform 0.15s, background 0.2s, border-color 0.2s;
     }
     .btn-primary {
@@ -423,29 +423,6 @@
     .lang-tab:hover { color: var(--ink); }
     .lang-tab.active { color: var(--teal-deep); border-bottom-color: var(--teal); }
     .lang-tab .flag { margin-right: 4px; }
-    .lang-more-btn {
-      margin-left: auto; margin-right: 6px;
-      padding: 7px 12px; border-radius: 8px;
-      border: 1px solid var(--line); background: var(--surface);
-      color: var(--teal-deep); font-size: 12px; font-weight: 700;
-    }
-    .lang-dropdown {
-      position: absolute; top: 48px; right: 12px; z-index: 200;
-      width: min(260px, 90%); max-height: 340px; overflow-y: auto;
-      background: var(--surface); border: 1px solid var(--line);
-      border-radius: 14px; padding: 8px; display: none;
-    }
-    .lang-dropdown.show { display: block; animation: rise 0.2s ease; }
-    .lang-dropdown-item {
-      display: flex; align-items: center; gap: 10px; width: 100%;
-      padding: 10px 12px; border: none; border-radius: 8px;
-      background: none; color: var(--ink-soft);
-      font-family: var(--font); font-size: 13px; cursor: pointer; text-align: left;
-    }
-    .lang-dropdown-item:hover, .lang-dropdown-item.active {
-      background: var(--teal-soft); color: var(--teal-deep);
-    }
-    .lang-dropdown-search { margin-bottom: 6px; }
 
     .cam-pane { flex: 1; display: flex; flex-direction: column; min-height: 0; }
     .cam-area {
@@ -468,6 +445,10 @@
     .mode-badge.phrase { color: var(--teal-deep); }
     .mode-badge.spell { color: var(--sky); }
     .mode-badge.isl { color: var(--saffron); }
+    .spell-degraded { display: none; background: #fcefe0; color: var(--saffron); padding: 10px 16px;
+      border-radius: 10px; margin: 8px 16px 0 16px; font-size: 13px; font-weight: 600;
+      border: 1px solid #f0c988; }
+    .spell-degraded.on { display: block; }
     .hand-badge { bottom: 14px; right: 14px; }
     .hand-badge.ok { color: var(--success); }
     .hand-badge.none { color: var(--danger); }
@@ -849,7 +830,7 @@
 </head>
 <body>
   <div class="ambient"></div>
-  <div class="toast" id="toast"></div>
+  <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <div id="loaderOverlay">
     <div class="loader-title">Vani-Setu</div>
@@ -882,11 +863,11 @@
 
         <div class="login-step active" id="step1">
           <div class="form-group">
-            <label class="form-label">Email address</label>
+            <label class="form-label" for="emailInput">Email address</label>
             <input type="email" class="form-input" id="emailInput" placeholder="you@college.edu" autocomplete="email">
           </div>
           <div class="form-group" id="passwordWrap" style="display:none;">
-            <label class="form-label">Password</label>
+            <label class="form-label" for="passwordInput">Password</label>
             <input type="password" class="form-input" id="passwordInput" placeholder="At least 6 characters" autocomplete="current-password">
           </div>
           <div class="email-row" id="passwordActions" style="display:none;margin-top:10px;">
@@ -906,12 +887,12 @@
           <div class="form-group">
             <label class="form-label">Verification code</label>
             <div class="otp-row">
-              <input type="text" class="otp-box" maxlength="1" data-idx="0" inputmode="numeric">
-              <input type="text" class="otp-box" maxlength="1" data-idx="1" inputmode="numeric">
-              <input type="text" class="otp-box" maxlength="1" data-idx="2" inputmode="numeric">
-              <input type="text" class="otp-box" maxlength="1" data-idx="3" inputmode="numeric">
-              <input type="text" class="otp-box" maxlength="1" data-idx="4" inputmode="numeric">
-              <input type="text" class="otp-box" maxlength="1" data-idx="5" inputmode="numeric">
+              <input type="text" class="otp-box" maxlength="1" data-idx="0" inputmode="numeric" autocomplete="one-time-code" aria-label="Verification code digit 1">
+              <input type="text" class="otp-box" maxlength="1" data-idx="1" inputmode="numeric" autocomplete="one-time-code" aria-label="Verification code digit 2">
+              <input type="text" class="otp-box" maxlength="1" data-idx="2" inputmode="numeric" autocomplete="one-time-code" aria-label="Verification code digit 3">
+              <input type="text" class="otp-box" maxlength="1" data-idx="3" inputmode="numeric" autocomplete="one-time-code" aria-label="Verification code digit 4">
+              <input type="text" class="otp-box" maxlength="1" data-idx="4" inputmode="numeric" autocomplete="one-time-code" aria-label="Verification code digit 5">
+              <input type="text" class="otp-box" maxlength="1" data-idx="5" inputmode="numeric" autocomplete="one-time-code" aria-label="Verification code digit 6">
             </div>
           </div>
           <p class="msg-text">Code sent to <span class="highlight" id="emailDisplay"></span></p>
@@ -952,7 +933,7 @@
         <a href="#" class="nav-link active" id="navHome">Home</a>
         <a href="#" class="nav-link" id="navGuide">Dictionary</a>
         <a href="#" class="nav-link" id="navAbout">About</a>
-        <div class="nav-user" id="navUser">
+        <div class="nav-user" id="navUser" role="button" tabindex="0" aria-haspopup="menu" aria-expanded="false">
           <div class="nav-avatar" id="navAvatar">V</div>
           <span class="nav-email" id="navEmail">user@email.com</span>
           <div class="user-menu" id="userMenu">
@@ -970,11 +951,12 @@
     </div>
 
     <div class="translator-body" id="transBody" style="opacity:0;transition:opacity 0.6s;">
+          <div id="spellDegraded" class="spell-degraded" role="status" aria-live="polite">Letter model not loaded — only 14 of 26 letters work via rules. Reload the page or check the server.</div>
       <div class="pane">
         <div class="lang-row" id="inputLangRow">
           <div class="lang-tab" style="color:var(--muted);font-size:11px;letter-spacing:0.08em;">INPUT</div>
           <div class="lang-tab active" data-input="ASL"><span class="flag">US</span> ASL</div>
-          <div class="lang-tab" data-input="ISL"><span class="flag">IN</span> ISL</div>
+          <div class="lang-tab" data-input="ISL" role="button" tabindex="0"><span class="flag">IN</span> ISL</div>
           <span class="model-pill" id="modelPill">RULES</span>
         </div>
         <div class="cam-pane">
@@ -1018,7 +1000,7 @@
         <div class="lang-row" id="outputLangRow">
           <div class="lang-tab" style="color:var(--muted);font-size:11px;letter-spacing:0.08em;">OUTPUT</div>
           <div class="lang-tab active" data-lang="en">English</div>
-          <div class="lang-tab" data-lang="hi">Hindi</div>
+          <div class="lang-tab" data-lang="hi" role="button" tabindex="0">Hindi</div>
         </div>
 
         <div class="trans-pane">
@@ -1042,7 +1024,7 @@
               <span id="transSecondaryLang">HINDI TRANSLATION</span>
               <span class="trans-loading" id="transLoadingSpinner" style="display:none;"></span>
             </div>
-            <div class="trans-secondary-text" id="transSecondaryText">...</div>
+            <div class="trans-secondary-text" id="transSecondaryText" lang="hi">...</div>
           </div>
 
           <div class="conf-row" id="confRow" style="display:none;">
@@ -1216,7 +1198,6 @@ function showToast(msg, type='info', duration=4000) {
   clearTimeout(t._timer);
   t._timer = setTimeout(() => t.classList.remove('show'), duration);
 }
-window.showToast = showToast;
 
 // ==============================
 // LOGIN CONTROLLER
@@ -1537,7 +1518,6 @@ class TranslationController {
     this.currentLang = 'en';
     this.lastText = '';
     this.translateTimeout = null;
-    this.isTranslating = false;
     this.cache = {};
     this.initLangUI();
   }
@@ -1608,7 +1588,6 @@ class TranslationController {
     // Debounce
     clearTimeout(this.translateTimeout);
     this.translateTimeout = setTimeout(async () => {
-      this.isTranslating = true;
       document.getElementById('transLoadingSpinner').style.display = '';
       document.getElementById('transSecondaryText').classList.add('loading');
 
@@ -1636,8 +1615,7 @@ class TranslationController {
 
       document.getElementById('transSecondaryText').classList.remove('loading');
       document.getElementById('transLoadingSpinner').style.display = 'none';
-      this.isTranslating = false;
-    }, 600);
+      }, 600);
   }
 
   // Called by the App whenever translation text changes
@@ -1707,10 +1685,23 @@ class ASL {
     for (const [t, p] of [[8, 6], [12, 10], [16, 14], [20, 18]]) f.push(l[t].y < l[p].y);
     this.fg = f; return f;
   }
-  _phrase(l) {
+  // Shared geometry for every rule. Returning this bundle means the three
+  // classifiers (SPELL/PHRASE/ISL) read as pure decision tables instead of
+  // repeating the same preamble three times with the same magic numbers.
+  // h is palm length; too-small h means the hand is practically off-camera.
+  _geom(l) {
     const f = this._fg(l), [T, I, M, R, P] = f, n = f.filter(Boolean).length;
-    const h = this._d(l, 0, 9); if (h < .01) return '?';
-    const ti = this._d(l, 4, 8) / h, im = this._d(l, 8, 12) / h, mr = this._d(l, 12, 16) / h, tc = ti < .28;
+    const h = this._d(l, 0, 9);
+    if (h < .01) return null;
+    const ti = this._d(l, 4, 8) / h;
+    const im = this._d(l, 8, 12) / h;
+    const mr = this._d(l, 12, 16) / h;
+    return { f, T, I, M, R, P, n, ti, im, mr, tc: ti < .28 };
+  }
+
+  _phrase(l) {
+    const g = this._geom(l); if (!g) return '?';
+    const { T, I, M, R, P, n, im, mr, tc } = g;
     if (T && I && !M && !R && P) return "I Love You";
     if (!T && I && !M && !R && P) return "Rock On";
     if (n === 5) return (im > .2 && mr > .15) ? "Hello" : "Stop";
@@ -1722,9 +1713,8 @@ class ASL {
     return '?';
   }
   _spell(l) {
-    const f = this._fg(l), [T, I, M, R, P] = f, n = f.filter(Boolean).length;
-    const h = this._d(l, 0, 9); if (h < .01) return '?';
-    const ti = this._d(l, 4, 8) / h, im = this._d(l, 8, 12) / h, mr = this._d(l, 12, 16) / h, tc = ti < .28;
+    const g = this._geom(l); if (!g) return '?';
+    const { T, I, M, R, P, n, im, mr, tc } = g;
     if (n === 0) {
       if (tc) return 'O';
       const tb = l[4].y < l[6].y, bs = Math.abs(l[4].x - l[5].x) > Math.abs(l[4].x - l[9].x);
@@ -1740,9 +1730,8 @@ class ASL {
     return '?';
   }
   _isl(l) {
-    const f = this._fg(l), [T, I, M, R, P] = f, n = f.filter(Boolean).length;
-    const h = this._d(l, 0, 9); if (h < .01) return '?';
-    const ti = this._d(l, 4, 8) / h, im = this._d(l, 8, 12) / h, mr = this._d(l, 12, 16) / h, tc = ti < .28;
+    const g = this._geom(l); if (!g) return '?';
+    const { T, I, M, R, P, n, im, mr } = g;
     if (T && I && !M && !R && P) return "I Love You";
     if (n === 5) return (im > .2 && mr > .15) ? "Hello" : "Please";
     if (n === 4 && !T) return (im > .18) ? "Thank You" : "Namaste";
@@ -1808,6 +1797,40 @@ class Voice {
 const HC = [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [0, 9], [9, 10], [10, 11], [11, 12], [0, 13], [13, 14], [14, 15], [15, 16], [0, 17], [17, 18], [18, 19], [19, 20], [5, 9], [9, 13], [13, 17]];
 
 // ==============================
+// API helper
+// ==============================
+// One fetch wrapper for every /api/* call. Guarantees:
+//   - res.ok is checked, so a 4xx/5xx is not silently treated as success
+//   - 8-second timeout via AbortController, so a hung server does not wedge the UI
+//   - returns the parsed JSON body on success, throws Error('server unreachable')
+//     on network failure, or Error(serverMessage) on an error response
+// The caller writes `const data = await api('/path', body?)`.
+async function api(path, body, { timeout = 8000, method } = {}) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), timeout);
+  const init = {
+    method: method || (body === undefined ? 'GET' : 'POST'),
+    headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal: ctl.signal,
+  };
+  let res;
+  try {
+    res = await fetch(path, init);
+  } catch (e) {
+    clearTimeout(timer);
+    throw new Error('server unreachable');
+  }
+  clearTimeout(timer);
+  let data = null;
+  try { data = await res.json(); } catch (_) { /* no body, fall through */ }
+  if (!res.ok) {
+    throw new Error((data && data.message) || `request failed (${res.status})`);
+  }
+  return data || {};
+}
+
+// ==============================
 // MAIN APP
 // ==============================
 class App {
@@ -1821,7 +1844,6 @@ class App {
     this.mlReady = false; this.collecting = false; this.collectEvery = 0;
     this.signModels = {}; this._mlKind = null;
     this.dictionary = null; this.dictTab = 'letter'; this.dictLang = 'en'; this.dictQuery = '';
-    this.lastLm = null; this.catalog = null;
     this._mlBusy = false; this._mlLabel = null; this._mlConf = 0; this._mlTop = null; this._mlMs = 0;
     // Frames below this confidence vote '?' instead of a letter. The trainer picks it on
     // the validation set and the server sends it with /api/model-status (0.50 is a fallback).
@@ -1869,8 +1891,17 @@ class App {
 
     // Setup navbar interactions
     document.getElementById('navUser').onclick = () => {
-      document.getElementById('userMenu').classList.toggle('show');
+      const open = document.getElementById('userMenu').classList.toggle('show');
+      document.getElementById('navUser').setAttribute('aria-expanded', open ? 'true' : 'false');
     };
+    document.getElementById('navUser').addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.target.click(); }
+    });
+    document.querySelectorAll('[role="button"][tabindex="0"].lang-tab').forEach(tab => {
+      tab.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tab.click(); }
+      });
+    });
     document.addEventListener('click', e => {
       if (!document.getElementById('navUser').contains(e.target)) {
         document.getElementById('userMenu').classList.remove('show');
@@ -1930,7 +1961,6 @@ class App {
     document.getElementById('btnPractice').onclick = () => this.startQuiz();
     document.getElementById('quizSkip').onclick = () => this.nextQuizTarget(true);
     document.getElementById('quizStop').onclick = () => this.stopQuiz();
-    this.loadCatalog();
     this.refreshModelStatus();
 
     // Release webcam if the tab closes / user navigates away (green LED)
@@ -1972,8 +2002,7 @@ class App {
 
   async loadDictionary() {
     try {
-      const res = await fetch('/api/dictionary');
-      const data = await res.json();
+      const data = await api('/api/dictionary');
       if (data.success) {
         this.dictionary = data.dictionary;
         this._buildInfoMaps();
@@ -2013,15 +2042,6 @@ class App {
     showToast(`Now show “${sign}” to the camera and hold it still`, 'info', 3500);
   }
 
-  async loadCatalog() {
-    try {
-      const res = await fetch('/api/signs');
-      const data = await res.json();
-      if (data.success) this.catalog = data.catalog;
-    } catch (e) { /* use built-in guides */ }
-    this.fillCollectLabels();
-  }
-
   fillCollectLabels() {
     const sel = document.getElementById('collectLabel');
     const phrases = this.asl.lang === 'ISL' ? I_INFO : P_INFO;
@@ -2057,15 +2077,11 @@ class App {
     if (this._sugFor !== p) {
       this._sugFor = p;
       this._sugItems = WORD_LIST.filter(w => w.startsWith(p) && w !== p).slice(0, 4).map(word => ({ word, corrected: false }));
-      fetch('/api/suggest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ letters: p })
-      }).then(r => r.json()).then(data => {
+      api('/api/suggest', { letters: p }, { timeout: 2000 }).then(data => {
         if (this._sugFor === p && data.success && data.suggestions && data.suggestions.length) {
           this._sugItems = data.suggestions;
         }
-      }).catch(() => { /* keep the offline list */ });
+      }).catch(() => { /* keep the offline WORD_LIST */ });
     }
     return this._sugItems || [];
   }
@@ -2184,24 +2200,15 @@ class App {
     btn.textContent = 'Training…';
     showToast('Training the letter classifier (SVM), this takes about half a minute…', 'info', 6000);
     try {
-      const res = await fetch('/api/train', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind })
-      });
-      const data = await res.json();
-      if (data.success) {
-        showToast(
-          `Model retrained — ${(data.accuracy * 100).toFixed(1)}% on ${data.n_samples} samples, ${data.n_classes} signs`,
-          'success', 6000
-        );
-        this.log(`Retrained: ${(data.accuracy * 100).toFixed(1)}% accuracy`, 'sign');
-        await this.refreshModelStatus();
-      } else {
-        showToast(data.message || 'Training failed', 'error', 6000);
-      }
+      // Training can genuinely take ~30 s; give it 90 s before we timeout.
+      const data = await api('/api/train', { kind }, { timeout: 90000 });
+      const acc = data.accuracy == null ? 0 : data.accuracy * 100;
+      showToast(`Model retrained — ${acc.toFixed(1)}% on ${data.n_samples || 0} samples, ${data.n_classes || 0} signs`,
+                'success', 6000);
+      this.log(`Retrained: ${acc.toFixed(1)}% accuracy`, 'sign');
+      await this.refreshModelStatus();
     } catch (e) {
-      showToast('Could not reach the training endpoint', 'error');
+      showToast(e.message || 'Training failed', 'error', 6000);
     } finally {
       btn.disabled = false;
       btn.textContent = label;
@@ -2321,6 +2328,10 @@ class App {
     const text = on ? (kind === 'letter' ? 'ML MODEL' : 'NEURAL NET') : 'RULES';
     if (pill.textContent !== text) pill.textContent = text;
     pill.classList.toggle('on', on);
+    // Degraded Spell banner: 12 of 26 letters have no rule fallback at all.
+    // Only show when the user is on SPELL and the SVM failed to load.
+    const banner = document.getElementById('spellDegraded');
+    if (banner) banner.classList.toggle('on', kind === 'letter' && !this.mlReady);
   }
 
   // Reset every bit of state the live classifier wrote, so the UI never
@@ -2335,8 +2346,7 @@ class App {
 
   async refreshModelStatus() {
     try {
-      const res = await fetch('/api/model-status');
-      const data = await res.json();
+      const data = await api('/api/model-status');
       this.mlReady = !!(data.success && data.model_loaded);
       if (data.threshold) this.ML_MIN_CONF = Number(data.threshold);
       this.signModels = data.sign_models || {};
@@ -2400,12 +2410,7 @@ class App {
     const signer = document.getElementById('collectSigner').value.trim();
     const split = document.getElementById('collectTest').checked ? 'test' : '';
     try {
-      const res = await fetch('/api/collect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ label, hands, kind, signer, split })
-      });
-      const data = await res.json();
+      const data = await api('/api/collect', { label, hands, kind, signer, split });
       if (data.success) {
         const target = data.target || 25;
         const done = data.label_count >= target ? ' ✓ goal met' : '';
@@ -2413,20 +2418,16 @@ class App {
         document.getElementById('collectStat').textContent =
           `${data.label_count}/${target} × ${data.label} (${where}, ${data.samples} ${data.kind} samples)${done}`;
       }
-    } catch (e) { /* ignore dropped frames */ }
+    } catch (e) { /* ignore dropped frames and 4xx (e.g. bad label) */ }
   }
 
   async classifyMl(hands, kind) {
     const t0 = performance.now();
     try {
-      // Letters use the SVM on the first hand; phrase / ISL use the MLP on both hands
-      const res = await fetch('/api/classify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: kind, hands })
-      });
-      const data = await res.json();
-      // Smoothed round-trip time (browser -> Flask -> browser), shown next to FPS
+      // Letters use the SVM on the first hand; phrase/ISL use the MLP on both hands.
+      // 4 s timeout: a classify that cannot finish inside a few frames is dead
+      // weight on the hot path.
+      const data = await api('/api/classify', { mode: kind, hands }, { timeout: 4000 });
       const ms = performance.now() - t0;
       this._mlMs = this._mlMs ? this._mlMs * 0.8 + ms * 0.2 : ms;
       if (!data.success || !data.label) return null;
@@ -2528,7 +2529,6 @@ class App {
         landmarks: l,
         handedness: (r.handednesses && r.handednesses[i] && r.handednesses[i][0]) ? r.handednesses[i][0].categoryName : ''
       }));
-      this.lastLm = lm;
       hands.forEach(h => this.draw(h.landmarks));
       if (this.collecting) {
         this.collectEvery++;
@@ -2665,6 +2665,14 @@ class App {
   }
 
   key(e) {
+    // Escape closes the dictionary modal from anywhere.
+    if (e.key === 'Escape') {
+      const modal = document.getElementById('guideModal');
+      if (modal && !modal.classList.contains('hidden')) {
+        this.toggleGuide(false);
+        return;
+      }
+    }
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     switch (e.key) {
       case 'm': case 'M': this.doMode(); break;

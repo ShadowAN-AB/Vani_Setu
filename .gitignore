@@ -1,7 +1,6 @@
 __pycache__/
 *.pyc
 .venv/
-hand_landmarker.task
 .env
 .DS_Store
 Sign-Language-Interpreter-using-Deep-Learning-master/Code/dataset/landmarks.csv
