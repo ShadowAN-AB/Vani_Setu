@@ -1064,6 +1064,7 @@
             <button class="ctrl-btn" id="btnClear">Clear</button>
             <button class="ctrl-btn voice" id="btnVoice">Voice ON</button>
             <button class="ctrl-btn" id="btnPractice">Practice</button>
+            <button class="ctrl-btn" id="btnPolish" style="display:none" title="Rewrite the sentence as natural English using a local LLM">Polish</button>
           </div>
 
           <div class="log-section">
@@ -1933,6 +1934,7 @@ class App {
     document.getElementById('btnEnter').onclick = () => this.doEnter();
     document.getElementById('btnClear').onclick = () => this.doClear();
     document.getElementById('btnVoice').onclick = () => this.doVoice();
+    document.getElementById('btnPolish').onclick = () => this.doPolish();
     document.getElementById('pillPhrase').onclick = () => { if (this.asl.mode !== 'PHRASE') this.doMode(); };
     document.getElementById('pillSpell').onclick = () => { if (this.asl.mode !== 'SPELL') this.doMode(); };
     document.getElementById('navHome').onclick = (e) => { e.preventDefault(); this.showHome(); };
@@ -1962,6 +1964,7 @@ class App {
     document.getElementById('quizSkip').onclick = () => this.nextQuizTarget(true);
     document.getElementById('quizStop').onclick = () => this.stopQuiz();
     this.refreshModelStatus();
+    this.refreshPolishStatus();
 
     // Release webcam if the tab closes / user navigates away (green LED)
     window.addEventListener('pagehide', () => this.stopCamera());
@@ -2706,6 +2709,49 @@ class App {
     if (this.translator) this.translator.onTextChanged('');
   }
   doVoice() { this.voice.toggle(); }
+
+  async refreshPolishStatus() {
+    try {
+      const data = await api('/api/health');
+      const enabled = !!(data && data.checks && data.checks.polish_enabled);
+      const btn = document.getElementById('btnPolish');
+      if (btn) btn.style.display = enabled ? '' : 'none';
+      this._polishEnabled = enabled;
+    } catch (_) {
+      this._polishEnabled = false;
+    }
+  }
+
+  async doPolish() {
+    if (!this._polishEnabled) return;
+    const btn = document.getElementById('btnPolish');
+    const raw = (this.getFullText() || '').trim();
+    if (!raw) { showToast('Nothing to polish yet.', 'info', 1600); return; }
+    if (btn.disabled) return;
+    btn.disabled = true;
+    const origLabel = btn.textContent;
+    btn.textContent = 'Polishing...';
+    try {
+      const data = await api('/api/polish', { text: raw }, { timeout: 20000 });
+      const polished = (data && data.polished) || '';
+      if (polished) {
+        this.sentence = polished;
+        this.word = '';
+        document.getElementById('transText').innerHTML = this.esc(polished) + '<span class="cursor"></span>';
+        document.getElementById('wordText').textContent = '...';
+        if (this.translator) this.translator.onTextChanged(polished);
+        this.log('Polished: "' + polished + '"', 'sentence');
+        showToast('Polished with ' + (data.model || 'local LLM'), 'success', 2000);
+      } else {
+        showToast('No polished output returned.', 'warn', 2000);
+      }
+    } catch (e) {
+      showToast('Polish failed: ' + e.message, 'warn', 2500);
+    }
+    btn.disabled = false;
+    btn.textContent = origLabel;
+  }
+
   doSpeak() {
     const f = this.getFullText();
     if (f) {

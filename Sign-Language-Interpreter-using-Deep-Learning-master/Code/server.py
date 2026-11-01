@@ -105,6 +105,15 @@ RATE_LIMIT_SECONDS = 60
 # The app translates the sentence into Hindi only; English is the source language.
 SUPPORTED_LANGUAGES = {"en": "English", "hi": "Hindi"}
 
+# Optional sentence polisher via a locally-running Ollama. Off by default so the
+# Render deploy and anyone without Ollama is unaffected; set OLLAMA_URL to opt in.
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "").strip()
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5:3b-instruct").strip()
+OLLAMA_TIMEOUT = float(os.environ.get("OLLAMA_TIMEOUT", "15"))
+POLISH_MAX_INPUT = 240
+polish_cache = {}
+polish_lock = Lock()
+
 otp_store = {}
 store_lock = Lock()
 translation_cache = {}
@@ -489,6 +498,81 @@ def translate_text():
     return jsonify({"success": True, "translated": translated, "source": used})
 
 
+def _polish_available():
+    return bool(OLLAMA_URL)
+
+
+POLISH_PROMPT = (
+    "Rewrite the following sign-language gloss as one natural, grammatical "
+    "English sentence. Keep the meaning. Do not add new facts. Reply with "
+    "only the rewritten sentence, no quotes, no preamble.\n\nGloss: "
+)
+
+
+def _ollama_polish(text):
+    url = OLLAMA_URL.rstrip("/") + "/api/generate"
+    payload = json.dumps({
+        "model": OLLAMA_MODEL,
+        "prompt": POLISH_PROMPT + text,
+        "stream": False,
+        "options": {"temperature": 0.2, "num_predict": 80},
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=OLLAMA_TIMEOUT) as resp:
+        body = json.loads(resp.read().decode("utf-8"))
+    reply = (body.get("response") or "").strip()
+    # Keep the first non-empty line, strip surrounding quotes.
+    for line in reply.splitlines():
+        line = line.strip().strip('"').strip("'")
+        if line:
+            reply = line
+            break
+    return reply
+
+
+@app.route("/api/polish", methods=["POST"])
+def polish():
+    if not _polish_available():
+        return _bad("Sentence polishing is disabled on this server.", 503,
+                    enabled=False)
+    data = request.get_json(silent=True) or {}
+    text = str(data.get("text") or "").strip()
+    if not text:
+        return _bad("text is required", 400)
+    if len(text) > POLISH_MAX_INPUT:
+        return _bad(f"text too long (max {POLISH_MAX_INPUT} chars)", 400)
+
+    with polish_lock:
+        cached = polish_cache.get(text)
+    if cached:
+        return jsonify({"success": True, "polished": cached, "source": "cache"})
+
+    try:
+        polished = _ollama_polish(text)
+    except urllib.error.URLError as e:
+        return _bad(f"Ollama unreachable: {e.reason}", 503)
+    except Exception as e:
+        print(f"  [ERROR] polish failed: {e}")
+        return _bad("polishing failed", 500)
+
+    if not polished:
+        return _bad("empty response from model", 502)
+
+    with polish_lock:
+        if len(polish_cache) >= 200:
+            for k in list(polish_cache.keys())[:50]:
+                del polish_cache[k]
+        polish_cache[text] = polished
+
+    return jsonify({"success": True, "polished": polished,
+                    "source": "ollama", "model": OLLAMA_MODEL})
+
+
 def _load_sign_shapes():
     path = os.path.join(DATA_DIR, "sign_shapes.json")
     try:
@@ -518,6 +602,8 @@ def health():
         "translator": TRANSLATOR_AVAILABLE,
         "email_configured": EMAIL_CONFIGURED,
         "auth_mode": AUTH_MODE,
+        "polish_enabled": _polish_available(),
+        "polish_model": OLLAMA_MODEL if _polish_available() else None,
     }
     ready = checks["model_loaded"] and checks["hand_model_file"]
     return jsonify({"success": True, "ready_for_demo": ready, "checks": checks})

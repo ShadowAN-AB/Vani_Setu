@@ -317,6 +317,31 @@ See `Code/dataset/DATASET_SOURCE.md` and `RECORDING_GUIDE.md`.
 
 ---
 
+## Optional: sentence polishing with a local LLM
+
+The hands produce a terse gloss ("ME GO SCHOOL YESTERDAY"). You can route that
+through a local [Ollama](https://ollama.com) model to get natural English
+("I went to school yesterday.") without sending anything to a cloud API.
+
+1. Install Ollama and pull a small instruct model:
+   ```bash
+   ollama pull qwen2.5:3b-instruct
+   ```
+2. Start the Vani-Setu server with the Ollama URL:
+   ```bash
+   OLLAMA_URL=http://127.0.0.1:11434 ./run.sh
+   ```
+   Optional: `OLLAMA_MODEL=qwen2.5:1.5b` for a smaller model,
+   `OLLAMA_TIMEOUT=10` to shorten the per-request wait.
+3. A **Polish** button appears next to Speak. It rewrites the current sentence
+   using the local LLM; if Ollama is down the button hides itself and nothing
+   else breaks.
+
+The feature is off by default, so Render deploys and anyone without Ollama
+installed are unaffected.
+
+---
+
 ## Honest limits
 
 - Recognition uses single frames, so motion letters **J** and **Z** are only partly covered (an LSTM over frame sequences is the next step).
