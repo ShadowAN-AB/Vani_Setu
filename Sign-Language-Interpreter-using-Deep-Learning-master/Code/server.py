@@ -20,8 +20,7 @@ from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 import data as dataset
-from features import hands_to_two_hand_features, landmarks_to_features
-from nn.numpy_mlp import NumpyMLP
+from features import landmarks_to_features
 from suggest import Suggester
 from models_user import User, db, init_db
 from signs import OFFLINE_HI, dictionary
@@ -50,11 +49,9 @@ DATA_DIR = os.path.join(APP_DIR, "dataset")
 MODEL_PATH = os.path.join(APP_DIR, "models", "sign_svm.joblib")
 LEGACY_MODEL_PATH = os.path.join(APP_DIR, "models", "sign_rf.joblib")  # pre-v2 file name
 DEFAULT_THRESHOLD = 0.50
-# Neural-network models for whole signs, trained with nn/train_mlp.py (one file per kind)
-SIGN_MODEL_PATHS = {
-    "phrase": os.path.join(APP_DIR, "models", "phrase_mlp.npz"),
-    "isl": os.path.join(APP_DIR, "models", "isl_mlp.npz"),
-}
+# Phrase and ISL run as JavaScript finger-pose rules in the browser; the server
+# only hosts the letter SVM. Earlier builds carried a NumpyMLP scaffold for
+# phrase/ISL networks that were never trained; it was removed in Phase 1.
 HAND_TASK_PATH = os.path.join(APP_DIR, "hand_landmarker.task")
 HAND_TASK_URL = (
     "https://storage.googleapis.com/mediapipe-models/hand_landmarker/"
@@ -126,7 +123,6 @@ model_lock = Lock()
 MAX_CACHE_SIZE = 500
 ml_model = None       # the classifier (has predict_proba and classes_)
 ml_info = {}          # feature version, threshold and headline metrics saved by the trainer
-sign_models = {}      # kind -> NumpyMLP for phrase / ISL signs
 suggester = Suggester()  # word prediction; uses the letter model's confusion counts
 
 
@@ -180,20 +176,6 @@ def load_ml_model():
         with model_lock:
             ml_model, ml_info = None, {}
         print(f"  [WARN] Could not load model: {e}")
-
-
-def load_sign_models():
-    """Load whichever phrase / ISL networks have been trained; Phrase and ISL modes use rules otherwise."""
-    global sign_models
-    loaded = {}
-    for kind, path in SIGN_MODEL_PATHS.items():
-        if os.path.exists(path):
-            try:
-                loaded[kind] = NumpyMLP(path)
-                print(f"  [OK] Loaded {kind} network: {len(loaded[kind].classes_)} signs")
-            except Exception as e:
-                print(f"  [WARN] Could not load {path}: {e}")
-    sign_models = loaded
 
 
 def generate_otp():
@@ -264,7 +246,6 @@ CORS(app)
 ensure_hand_landmarker()
 init_db(app)
 load_ml_model()
-load_sign_models()
 
 
 def _bad(message, code=400, **extra):
@@ -597,7 +578,6 @@ def health():
         "server": True,
         "model_loaded": ml_model is not None,
         "dataset_letters": dataset.counts("letter"),
-        "dataset_phrases": dataset.counts("phrase"),
         "hand_model_file": os.path.exists(os.path.join(APP_DIR, "hand_landmarker.task")),
         "translator": TRANSLATOR_AVAILABLE,
         "email_configured": EMAIL_CONFIGURED,
@@ -619,16 +599,8 @@ def model_status():
         "threshold": ml_info.get("threshold", DEFAULT_THRESHOLD),
         "test_accuracy": (ml_info.get("metrics") or {}).get("accuracy"),
         "samples": dataset.counts("letter"),
-        "phrase_samples": dataset.counts("phrase"),
         "target_per_label": TARGET_SAMPLES_PER_LABEL,
         "training_enabled": TRAINING_ENABLED,
-        "sign_models": {
-            kind: {"loaded": kind in sign_models,
-                   "signs": [str(c) for c in sign_models[kind].classes_] if kind in sign_models else [],
-                   "threshold": sign_models[kind].threshold if kind in sign_models else None,
-                   "samples": dataset.counts(kind)}
-            for kind in SIGN_MODEL_PATHS
-        },
     })
 
 
@@ -645,11 +617,12 @@ def collect_sample():
     if not label or label == "?":
         return jsonify({"success": False, "message": "Pick a sign label first"}), 400
 
-    # Letters, ASL phrases and ISL signs share one file but are kept apart by "kind",
-    # so phrase samples never leak into the letter model.
+    # Phase 1 removed phrase/ISL recording: those modes run as JavaScript
+    # finger-pose rules and have no server-side model to train. Only "letter"
+    # samples are accepted.
     kind = str(data.get("kind") or "letter").strip().lower()
-    if kind not in dataset.KINDS:
-        kind = "letter"
+    if kind != "letter":
+        return _bad("Phrase and ISL are rule-based in this build; only letter samples are recorded.", 422)
 
     try:
         with csv_lock:
@@ -678,42 +651,35 @@ def collect_sample():
 
 @app.route("/api/train", methods=["POST"])
 def train_model():
-    """Retrain from the browser and hot-reload, so a demo never needs a terminal.
-    kind=letter runs train_classifier.py (SVM); kind=phrase / isl runs nn/train_mlp.py (MLP)."""
+    """Retrain the letter SVM from the browser and hot-reload, so a demo never
+    needs a terminal. Phrase and ISL are JavaScript finger-pose rules and have
+    no server-side training step."""
     if not TRAINING_ENABLED:
         return _training_disabled()
     body = request.get_json(silent=True) or {}
     kind = str(body.get("kind") or "letter").lower()
-    if kind not in dataset.KINDS:
-        kind = "letter"
+    if kind != "letter":
+        return _bad("Phrase and ISL are rule-based in this build; nothing to train.", 422)
     if not train_lock.acquire(blocking=False):
         return jsonify({"success": False, "message": "Training already in progress"}), 409
 
     try:
-        if kind == "letter":
-            cmd = [sys.executable, os.path.join(APP_DIR, "train_classifier.py")]
-            report = os.path.join(APP_DIR, "reports", "metrics.json")
-        else:
-            cmd = [sys.executable, os.path.join(APP_DIR, "nn", "train_mlp.py"), "--kind", kind]
-            report = os.path.join(APP_DIR, "reports", f"nn_{kind}.json")
+        cmd = [sys.executable, os.path.join(APP_DIR, "train_classifier.py")]
+        report = os.path.join(APP_DIR, "reports", "metrics.json")
         proc = subprocess.run(cmd, cwd=APP_DIR, capture_output=True, text=True, timeout=900)
         if proc.returncode != 0:
             out = (proc.stdout or "") + "\n" + (proc.stderr or "")
             lines = [l for l in out.strip().splitlines() if l.strip()]
             message = lines[-1] if lines else "Training failed"
             # Precondition failures are 422 (unprocessable), not 500 (server crash):
-            # "no samples yet" and "no TensorFlow" are perfectly ordinary states
-            # on a fresh clone or a web-only server.
-            if proc.returncode == 2 and "TensorFlow" in out:
-                return _bad("Training the neural network needs TensorFlow: pip install -r requirements_train.txt", 422)
+            # "no samples yet" is a perfectly ordinary state on a fresh clone.
             if ("samples yet" in out) or ("No letter samples found" in out):
-                return _bad(f"No {kind} samples yet. Record some first.", 422)
+                return _bad("No letter samples yet. Record some first.", 422)
             if "Need at least two" in out:
                 return _bad(message, 422)
             return _bad(message, 500)
 
         load_ml_model()
-        load_sign_models()
         metrics = {}
         if os.path.exists(report):
             with open(report, encoding="utf-8") as f:
@@ -721,11 +687,11 @@ def train_model():
         test = metrics.get("test") or {}
         return jsonify({
             "success": True,
-            "kind": kind,
+            "kind": "letter",
             "accuracy": metrics.get("accuracy", test.get("accuracy")),
             "n_samples": metrics.get("n_samples", sum((metrics.get("split") or {}).get(k, 0) for k in ("train", "validation", "test"))),
             "n_classes": metrics.get("n_classes", len(metrics.get("classes", []))),
-            "model_loaded": ml_model is not None if kind == "letter" else kind in sign_models,
+            "model_loaded": ml_model is not None,
         })
     except subprocess.TimeoutExpired:
         return jsonify({"success": False, "message": "Training timed out"}), 504
@@ -745,11 +711,14 @@ def suggest_words():
 
 @app.route("/api/classify", methods=["POST"])
 def classify_landmarks():
-    """mode=letter: SVM on the first hand. mode=phrase / isl: the MLP for that kind on both hands."""
+    """SVM over the first hand's 88-feature vector. Phrase and ISL are handled
+    by the JavaScript rule classifiers in the browser and never reach here."""
     data = request.get_json(silent=True)
     if not data or ("landmarks" not in data and "hands" not in data):
         return jsonify({"success": False, "message": "landmarks required"}), 400
     mode = str(data.get("mode") or "letter").lower()
+    if mode != "letter":
+        return _bad("Phrase and ISL run as JavaScript rules; no server classify.", 422)
 
     start = time.perf_counter()
     try:
@@ -757,25 +726,18 @@ def classify_landmarks():
     except ValueError as e:
         return jsonify({"success": False, "message": str(e)}), 400
 
-    if mode in SIGN_MODEL_PATHS:
-        model = sign_models.get(mode)
-        if model is None:
-            return _bad(f"No {mode} network trained yet", 404)
-        feats = hands_to_two_hand_features(hands)
-        threshold = model.threshold
-    else:
-        # Grab a consistent snapshot of (model, feature_version, threshold) under
-        # model_lock. Without this, /api/train can rebind ml_model and ml_info
-        # separately while a classify request is mid-flight, pairing a new
-        # model with the OLD/empty info dict (feature_version defaults to 1 ->
-        # a 63-length vector into an 88-feature pipeline -> sklearn ValueError).
-        with model_lock:
-            model = ml_model
-            fv = int((ml_info or {}).get("feature_version", 1))
-            threshold = float((ml_info or {}).get("threshold", DEFAULT_THRESHOLD))
-        if model is None:
-            return _bad("No trained model yet. Run train_classifier.py", 404)
-        feats = landmarks_to_features(hands[0][0], fv)
+    # Grab a consistent snapshot of (model, feature_version, threshold) under
+    # model_lock. Without this, /api/train can rebind ml_model and ml_info
+    # separately while a classify request is mid-flight, pairing a new
+    # model with the OLD/empty info dict (feature_version defaults to 1 ->
+    # a 63-length vector into an 88-feature pipeline -> sklearn ValueError).
+    with model_lock:
+        model = ml_model
+        fv = int((ml_info or {}).get("feature_version", 1))
+        threshold = float((ml_info or {}).get("threshold", DEFAULT_THRESHOLD))
+    if model is None:
+        return _bad("No trained model yet. Run train_classifier.py", 404)
+    feats = landmarks_to_features(hands[0][0], fv)
 
     try:
         # The label always comes from the highest probability, so the label and
@@ -786,7 +748,7 @@ def classify_landmarks():
         top = [{"label": classes[i], "confidence": round(float(probs[i]), 4)} for i in order[:3]]
         return jsonify({
             "success": True,
-            "mode": mode if mode in SIGN_MODEL_PATHS else "letter",
+            "mode": "letter",
             "label": top[0]["label"],
             "confidence": top[0]["confidence"],
             "top": top,

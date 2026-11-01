@@ -35,8 +35,8 @@ Day to day, run it on **localhost** at `http://127.0.0.1:5001` (`./run.sh`). The
 |------|--------|
 | **Letter model** | 88 features instead of 63 (palm-length scaling, 10 fingertip distances, 15 joint angles); training data augmented with mirrored, tilted and jittered copies; 70 / 15 / 15 split with C and γ tuned on validation. **96.9%** test accuracy, **97.1% ± 1.6%** cross-validation. |
 | **Robustness** | With the other hand the old model fell to 64.3%; the new one scores 96.9%. Tilted 15°: 78.4% → 96.2% (−15°: 94.7%). Hand 40% smaller: 72.1% → 96.9%. All numbers from `reports/metrics.json`. |
-| **Neural networks** | Keras MLP (Dense 128 → 64, ReLU, dropout, softmax) for letters, ASL phrases and ISL signs. Weights are exported and run with NumPy, so the server needs no TensorFlow. |
-| **Two hands** | MediaPipe tracks two hands; phrase and ISL samples keep both, with their Left / Right label (181 features). |
+| **Phrase & ISL** | Finger-pose rules in the browser (JavaScript), guarded against regression by `tools/check_rules.py`. The earlier MLP scaffold was removed; it was never trained and the live site only ever ran rules. |
+| **Two hands** | MediaPipe tracks two hands; the Left / Right label is used by the rule classifiers for signs like "I Love You". |
 | **Word prediction** | Noisy-channel model: word frequency × how often the classifier confuses letters, so X-E-D still suggests RED. |
 | **Dictionary** | New screen showing how to make every letter and sign, with drawings and English / Hindi instructions. |
 | **Output** | Translation is now English and Hindi only. |
@@ -113,7 +113,7 @@ Flask API ──► SVM, 88 features (Spell)
 Also included:
 
 - Email + password login (hashed passwords in a local **SQLite** file)
-- Live confidence bar whenever a trained model is in use, plus a **ML MODEL / NEURAL NET / RULES** badge
+- Live confidence bar whenever a trained model is in use, plus a **ML MODEL / RULES** badge
 - Word prediction while spelling: a noisy-channel model (word frequencies × the letter model's confusion matrix) can fix a misread letter, e.g. X-E-D → RED; corrected suggestions have a dashed border
 - Holding a sign types it once; drop the hand briefly for a double letter
 - Record dataset (with signer name and a **Test set** box) + **Retrain model** from the browser, on localhost
@@ -252,17 +252,15 @@ Hosted deploy notes (Render, HTTPS, guest login): see [DEPLOY.md](DEPLOY.md).
 
 ## Retrain / record
 
-- **Record dataset** in the UI saves raw landmarks with the signer's name to `Code/dataset/recordings/samples.csv` (letters and phrases, kept apart). Tick **Test set** to hold a person's samples out for new-signer testing. Recording and retraining work on localhost only.
-- **Retrain model** in the UI trains the model for the screen you are on (letters → SVM, Phrase / ISL → neural network) and reloads it without restarting Flask. The neural networks need TensorFlow on your laptop: `pip install -r requirements_train.txt`.
+- **Record dataset** in the UI saves raw landmarks with the signer's name to `Code/dataset/recordings/samples.csv`. Tick **Test set** to hold a person's samples out for new-signer testing. Recording and retraining work on localhost only, and only on the SPELL screen (phrase and ISL are rule-based).
+- **Retrain model** in the UI reruns `train_classifier.py` for the letter SVM and reloads it without restarting Flask.
 - From a terminal:
 
 ```bash
 cd Sign-Language-Interpreter-using-Deep-Learning-master/Code
 .venv/bin/python train_classifier.py    # train + reports (70/15/15 split, augmentation, grid search)
-.venv/bin/python compare_models.py      # six classifiers on the same data
+.venv/bin/python compare_models.py      # six classifiers on the same data (reproducibility script)
 .venv/bin/python evaluate.py            # before/after, CV, learning + validation curves, PCA/t-SNE, speed
-.venv/bin/pip install -r requirements_train.txt   # TensorFlow, only for the neural networks
-.venv/bin/python nn/train_mlp.py --kind letter    # MLP vs SVM on letters (also: --kind phrase / isl)
 ```
 
 Reports land in `Code/reports/`: `metrics.json`, `evaluation.md`, `model_comparison.md` and the figures.
@@ -291,18 +289,17 @@ Vani-Setu/
         ├── build_dataset.py           ← ASL Now JSON → asl_now_landmarks.csv
         ├── signs.py                   ← phrase / ISL rules + Hindi fallback
         ├── train_classifier.py        ← SVM trainer
-        ├── compare_models.py          ← classifier benchmark
+        ├── compare_models.py          ← classifier benchmark (reproducibility)
+        ├── experiments_m2.py          ← Milestone-2 experiments (reproducibility)
         ├── evaluate.py                ← evaluation report
         ├── suggest.py                 ← noisy-channel word prediction
-        ├── nn/train_mlp.py            ← Keras MLP (letters / phrases / ISL)
-        ├── nn/numpy_mlp.py            ← runs the exported MLP with NumPy on the server
         ├── build_wordlist.py          ← wordfreq → word_frequencies.csv
         ├── requirements_web.txt       ← server
-        ├── requirements_train.txt     ← TensorFlow + wordfreq, for training only
+        ├── requirements_train.txt     ← wordfreq, for rebuilding the word list only
         ├── .env.example
         ├── dataset/                   ← asl_now_landmarks.csv, word_frequencies.csv, recordings/, guides
-        ├── reports/                   ← metrics, evaluation, model comparison, neural-network curves
-        └── models/                    ← sign_svm.joblib (letters), letter_mlp.npz, phrase / isl _mlp.npz once trained
+        ├── reports/                   ← metrics, evaluation, model comparison
+        └── models/                    ← sign_svm.joblib (letters)
     └── legacy/                        ← original HackUNT-19 CNN code (unused, credited)
 ```
 

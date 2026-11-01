@@ -1099,18 +1099,18 @@
         <h2>College iteration</h2>
         <ul>
           <li>Letters A–Z with an <b>SVM</b> on 88 hand features (96.9% test accuracy), robust to the other hand and a tilted or distant hand.</li>
-          <li>A <b>neural network</b> (MLP) for ASL phrases and <b>Indian Sign Language (ISL)</b> signs once you record samples; rules until then.</li>
+          <li><b>Finger-pose rules</b> for ASL phrases and <b>Indian Sign Language (ISL)</b> signs — no training data required.</li>
           <li>Word prediction that can fix a misread letter, and a <b>Dictionary</b> showing how to make every sign.</li>
-          <li>A <b>landmark dataset recorder</b> with signer names and a test-set option, and retraining from the browser.</li>
+          <li>A <b>landmark dataset recorder</b> and retraining of the letter model from the browser.</li>
+          <li>Optional <b>sentence polishing</b> via a locally-running Ollama model (hidden unless configured).</li>
           <li>Offline Hindi fallback when Google Translate is unavailable.</li>
-          <li>SMTP secrets moved to <code>.env</code>. OTP prints in the terminal when email is not set.</li>
         </ul>
       </div>
       <div class="about-card">
         <h2>Honest limits</h2>
         <ul>
           <li>Single frames only, so the motion letters J and Z are only partly recognised.</li>
-          <li>Phrase and ISL modes use rules until you record samples and retrain.</li>
+          <li>Phrase and ISL use hand-written rules, not learned models.</li>
           <li>ISL here is a teaching approximation, not a certified ISL lexicon.</li>
         </ul>
       </div>
@@ -1843,7 +1843,7 @@ class App {
     this.hl = null; this.vid = null; this.cvs = null; this.cx = null;
     this.fpsFrames = 0; this.fpsLast = performance.now(); this.fpsVal = 0;
     this.mlReady = false; this.collecting = false; this.collectEvery = 0;
-    this.signModels = {}; this._mlKind = null;
+    this._mlKind = null;
     this.dictionary = null; this.dictTab = 'letter'; this.dictLang = 'en'; this.dictQuery = '';
     this._mlBusy = false; this._mlLabel = null; this._mlConf = 0; this._mlTop = null; this._mlMs = 0;
     // Frames below this confidence vote '?' instead of a letter. The trainer picks it on
@@ -2315,20 +2315,19 @@ class App {
   }
 
   modelReady(kind = this.currentKind()) {
-    if (kind === 'letter') return this.mlReady;
-    return !!(this.signModels[kind] && this.signModels[kind].loaded);
+    // SPELL uses the trained SVM; Phrase and ISL run as JS finger-pose rules.
+    return kind === 'letter' && this.mlReady;
   }
 
   thresholdFor(kind) {
-    if (kind === 'letter') return this.ML_MIN_CONF;
-    return (this.signModels[kind] && this.signModels[kind].threshold) || 0.5;
+    return kind === 'letter' ? this.ML_MIN_CONF : 0.5;
   }
 
   updateModelPill() {
     const pill = document.getElementById('modelPill');
     const kind = this.currentKind();
     const on = this.modelReady(kind);
-    const text = on ? (kind === 'letter' ? 'ML MODEL' : 'NEURAL NET') : 'RULES';
+    const text = on ? 'ML MODEL' : 'RULES';
     if (pill.textContent !== text) pill.textContent = text;
     pill.classList.toggle('on', on);
     // Degraded Spell banner: 12 of 26 letters have no rule fallback at all.
@@ -2352,7 +2351,6 @@ class App {
       const data = await api('/api/model-status');
       this.mlReady = !!(data.success && data.model_loaded);
       if (data.threshold) this.ML_MIN_CONF = Number(data.threshold);
-      this.signModels = data.sign_models || {};
       this.updateModelPill();
       if (data.samples != null) document.getElementById('collectStat').textContent = data.samples + ' samples';
       // The public host turns recording and retraining off; hide those controls there
@@ -2368,7 +2366,6 @@ class App {
       // training is possible; otherwise the loop keeps POSTing /api/classify
       // against a dead server and the pill lies about state.
       this.mlReady = false;
-      this.signModels = {};
       this.trainingEnabled = false;
       this.resetMl();
       this.updateModelPill();

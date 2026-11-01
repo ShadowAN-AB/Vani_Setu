@@ -1,30 +1,29 @@
 # How to record samples
 
 Recording runs only on **localhost** (the public site turns it off). Every sample is saved as the
-raw hand points (one or two hands) plus the signer's name, which hand MediaPipe saw, and whether it is
-a test sample, in `dataset/recordings/samples.csv`. Letters, ASL phrases and ISL signs share that file
-but are kept apart by the `kind` column (`letter`, `phrase`, `isl`), so they never mix.
+raw hand points plus the signer's name, which hand MediaPipe saw, and whether it is a test sample,
+in `dataset/recordings/samples.csv`.
+
+Only the **letter** model (SPELL screen) is trained from recordings; phrase and ISL run as
+JavaScript finger-pose rules and have no server-side training step.
 
 ## Steps
 
 1. Start the app (`./run.sh`) and open http://127.0.0.1:5001.
 2. Log in and click **Start camera**.
-3. Choose **SPELL** to record letters, or **PHRASE** to record word signs. In PHRASE mode the
-   **ASL** / **ISL** tab decides whether the samples are ASL phrases or ISL signs. For a two-handed
-   sign keep both hands in the frame; both are saved.
-4. Type the **signer's name** (required) and pick the sign in the dropdown.
+3. Switch to **SPELL** mode.
+4. Type the **signer's name** (required) and pick the letter in the dropdown.
 5. Tick **Test set** only when recording the new-signer test set (see below).
 6. Click **Record dataset**. Hold the sign for 3–4 seconds while slowly changing distance and angle.
    One sample is saved every 4 frames.
-7. Click **Stop recording** when the counter reaches about 25, then move to the next sign.
+7. Click **Stop recording** when the counter reaches about 25, then move to the next letter.
 
 ## What to record
 
 | Set | Who | What | Test set box |
 |-----|-----|------|--------------|
 | New-signer test set | 4–5 classmates who are **not** in the training data | All 26 letters, ~10 samples each | Ticked |
-| Extra letter training data | Team members | Letters the model confuses most: D, P, R, U, X, Z | Not ticked |
-| Phrase training data | All three team members and at least one other person | Each phrase or ISL sign, ~25 samples per person | Not ticked |
+| Extra training data | Team members | Letters the model confuses most: D, P, R, U, X, Z | Not ticked |
 
 Use a different name for every person, and the same name every time that person records.
 The trainer keeps all **Test set** samples out of training and reports their accuracy separately.
@@ -33,20 +32,16 @@ The trainer keeps all **Test set** samples out of training and reports their acc
 
 ```bash
 cd Sign-Language-Interpreter-using-Deep-Learning-master/Code
-.venv/bin/python train_classifier.py          # letter model (SVM)
-.venv/bin/python evaluate.py                  # curves, robustness and new-signer results
-.venv/bin/pip install -r requirements_train.txt   # once, for TensorFlow
-.venv/bin/python nn/train_mlp.py --kind phrase    # ASL phrase network (MLP)
-.venv/bin/python nn/train_mlp.py --kind isl       # ISL network (MLP)
+.venv/bin/python train_classifier.py   # letter model (SVM)
+.venv/bin/python evaluate.py           # curves, robustness and new-signer results
 ```
 
-Or click **Retrain model** in the app: it trains the model for the screen you are on (letters,
-ASL phrases or ISL). Once a phrase or ISL network exists, that screen switches from the hand-written
-rules to the network (the badge shows **NEURAL NET**). Each sign needs at least 10 training samples. Commit `dataset/recordings/samples.csv` so teammates get the samples.
+Or click **Retrain model** on the SPELL screen in the app — it reruns `train_classifier.py` and
+hot-reloads the result. Commit `dataset/recordings/samples.csv` so teammates get the samples.
 
 ## Tips for good data
 
 - Good light, the whole hand inside the frame
 - Vary distance and tilt the wrist slightly while recording
 - Record with the hand you will use in the demo; also record a few with the other hand
-- Pause recording while changing to the next sign
+- Pause recording while changing to the next letter
