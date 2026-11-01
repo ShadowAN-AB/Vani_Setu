@@ -483,20 +483,15 @@ def _polish_available():
     return bool(OLLAMA_URL)
 
 
-POLISH_PROMPT = (
-    "Rewrite the following sign-language gloss as one natural, grammatical "
-    "English sentence. Keep the meaning. Do not add new facts. Reply with "
-    "only the rewritten sentence, no quotes, no preamble.\n\nGloss: "
-)
-
-
-def _ollama_polish(text):
+def _ollama_generate(prompt, num_predict=80, temperature=0.2):
+    """POST a one-shot prompt to Ollama and return the model's reply string.
+    Caller is responsible for building the prompt and handling URLError."""
     url = OLLAMA_URL.rstrip("/") + "/api/generate"
     payload = json.dumps({
         "model": OLLAMA_MODEL,
-        "prompt": POLISH_PROMPT + text,
+        "prompt": prompt,
         "stream": False,
-        "options": {"temperature": 0.2, "num_predict": 80},
+        "options": {"temperature": temperature, "num_predict": num_predict},
     }).encode("utf-8")
     req = urllib.request.Request(
         url,
@@ -507,13 +502,28 @@ def _ollama_polish(text):
     with urllib.request.urlopen(req, timeout=OLLAMA_TIMEOUT) as resp:
         body = json.loads(resp.read().decode("utf-8"))
     reply = (body.get("response") or "").strip()
-    # Keep the first non-empty line, strip surrounding quotes.
+    # Keep the first non-empty line, strip surrounding quotes - small models
+    # often prefix their output with a quote or a filler line.
     for line in reply.splitlines():
-        line = line.strip().strip('"').strip("'")
+        line = line.strip().strip('"').strip("'").strip()
         if line:
-            reply = line
-            break
-    return reply
+            return line
+    return ""
+
+
+POLISH_PROMPT_PLAIN = (
+    "Rewrite the following sign-language gloss as one natural, grammatical "
+    "English sentence. Keep the meaning. Do not add new facts. Reply with "
+    "only the rewritten sentence, no quotes, no preamble.\n\nGloss: "
+)
+POLISH_PROMPT_CTX = (
+    "You are polishing sign-language glosses into natural English. The user "
+    "has already said the following, which you should treat as background "
+    "context (do not repeat it):\n\n{ctx}\n\nNow rewrite THIS new gloss as "
+    "one natural English sentence that reads coherently after the context. "
+    "Keep the meaning, add no new facts, reply with only the sentence, no "
+    "quotes, no preamble.\n\nGloss: {text}"
+)
 
 
 @app.route("/api/polish", methods=["POST"])
@@ -523,18 +533,24 @@ def polish():
                     enabled=False)
     data = request.get_json(silent=True) or {}
     text = str(data.get("text") or "").strip()
+    context = str(data.get("context") or "").strip()
     if not text:
         return _bad("text is required", 400)
     if len(text) > POLISH_MAX_INPUT:
         return _bad(f"text too long (max {POLISH_MAX_INPUT} chars)", 400)
+    if len(context) > POLISH_MAX_INPUT * 2:
+        context = context[-POLISH_MAX_INPUT * 2:]
 
+    cache_key = (context + "||" + text) if context else text
     with polish_lock:
-        cached = polish_cache.get(text)
+        cached = polish_cache.get(cache_key)
     if cached:
         return jsonify({"success": True, "polished": cached, "source": "cache"})
 
+    prompt = (POLISH_PROMPT_CTX.format(ctx=context, text=text)
+              if context else POLISH_PROMPT_PLAIN + text)
     try:
-        polished = _ollama_polish(text)
+        polished = _ollama_generate(prompt, num_predict=80, temperature=0.2)
     except urllib.error.URLError as e:
         return _bad(f"Ollama unreachable: {e.reason}", 503)
     except Exception as e:
@@ -548,9 +564,76 @@ def polish():
         if len(polish_cache) >= 200:
             for k in list(polish_cache.keys())[:50]:
                 del polish_cache[k]
-        polish_cache[text] = polished
+        polish_cache[cache_key] = polished
 
     return jsonify({"success": True, "polished": polished,
+                    "source": "ollama", "model": OLLAMA_MODEL})
+
+
+CORRECT_WORD_PROMPT_PLAIN = (
+    "A sign-language speller produced these letters, but one or two letters "
+    "may be wrong because similar hand shapes get confused (M/N, V/K, U/R, "
+    "D/F). Reply with the single English word they most likely meant - "
+    "lowercase, no punctuation, no explanation. If the letters already form "
+    "a word, reply with that word unchanged.\n\nLetters: {text}"
+)
+CORRECT_WORD_PROMPT_CTX = (
+    "A sign-language speller produced these letters, but one or two letters "
+    "may be wrong because similar hand shapes get confused (M/N, V/K, U/R, "
+    "D/F). Here is what they have already said so far:\n\n{ctx}\n\nGiven "
+    "that context, reply with the single English word they most likely "
+    "meant - lowercase, no punctuation, no explanation.\n\nLetters: {text}"
+)
+
+
+@app.route("/api/correct-word", methods=["POST"])
+def correct_word():
+    """LLM-based spelling fix for a single word. Stronger than the dictionary
+    suggester at rare words and names; off unless OLLAMA_URL is set."""
+    if not _polish_available():
+        return _bad("Word correction is disabled on this server.", 503,
+                    enabled=False)
+    data = request.get_json(silent=True) or {}
+    letters = str(data.get("letters") or "").strip()
+    context = str(data.get("context") or "").strip()
+    if not letters:
+        return _bad("letters is required", 400)
+    if len(letters) > 40:
+        return _bad("letters too long (max 40)", 400)
+    if len(context) > POLISH_MAX_INPUT * 2:
+        context = context[-POLISH_MAX_INPUT * 2:]
+
+    cache_key = "cw:" + (context + "||" + letters.lower() if context
+                         else letters.lower())
+    with polish_lock:
+        cached = polish_cache.get(cache_key)
+    if cached:
+        return jsonify({"success": True, "word": cached, "source": "cache"})
+
+    prompt = (CORRECT_WORD_PROMPT_CTX.format(ctx=context, text=letters)
+              if context else CORRECT_WORD_PROMPT_PLAIN.format(text=letters))
+    try:
+        word = _ollama_generate(prompt, num_predict=16, temperature=0.1)
+    except urllib.error.URLError as e:
+        return _bad(f"Ollama unreachable: {e.reason}", 503)
+    except Exception as e:
+        print(f"  [ERROR] correct-word failed: {e}")
+        return _bad("word correction failed", 500)
+
+    # Keep just the first word token - strip punctuation and any trailing
+    # commentary the model might slip in.
+    word = re.split(r"[\s,.;:!?]+", word.strip(), maxsplit=1)[0]
+    word = re.sub(r"[^A-Za-z'-]+", "", word).lower()
+    if not word:
+        return _bad("empty response from model", 502)
+
+    with polish_lock:
+        if len(polish_cache) >= 200:
+            for k in list(polish_cache.keys())[:50]:
+                del polish_cache[k]
+        polish_cache[cache_key] = word
+
+    return jsonify({"success": True, "word": word,
                     "source": "ollama", "model": OLLAMA_MODEL})
 
 

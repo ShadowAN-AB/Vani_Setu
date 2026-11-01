@@ -330,9 +330,15 @@ through a local [Ollama](https://ollama.com) model to get natural English
    ```
    Optional: `OLLAMA_MODEL=qwen2.5:1.5b` for a smaller model,
    `OLLAMA_TIMEOUT=10` to shorten the per-request wait.
-3. A **Polish** button appears next to Speak. It rewrites the current sentence
-   using the local LLM; if Ollama is down the button hides itself and nothing
-   else breaks.
+3. Two things light up when the server detects Ollama:
+   - A **Polish** button next to Speak rewrites the whole sentence into natural
+     English. It sends the last couple of polished sentences as context so
+     follow-ups read coherently.
+   - A **Fix with LLM** chip appears in the word-suggestion bar whenever you
+     have at least two letters typed on the SPELL screen. One click swaps the
+     current letters for the LLM's best guess ("HELO" → "HELLO"), using the
+     sentence so far as context so rare words resolve correctly.
+   Both hide themselves and nothing breaks if Ollama goes away.
 
 The feature is off by default, so Render deploys and anyone without Ollama
 installed are unaffected.

@@ -2093,9 +2093,11 @@ class App {
     const bar = document.getElementById('suggestBar');
     const list = document.getElementById('suggestList');
     const items = this.suggestions();
-    if (!items.length) { bar.style.display = 'none'; return; }
+    const showFix = !!(this._polishEnabled && this.asl.mode === 'SPELL'
+                       && this.word && this.word.length >= 2);
+    if (!items.length && !showFix) { bar.style.display = 'none'; return; }
     bar.style.display = 'flex';
-    const key = items.map(i => i.word).join(',');
+    const key = items.map(i => i.word).join(',') + '|' + (showFix ? 'fix' : '');
     if (list.dataset.shown === key) return;
     list.dataset.shown = key;
     list.innerHTML = '';
@@ -2105,6 +2107,14 @@ class App {
       b.textContent = item.word;
       if (item.corrected) b.title = 'Suggested because a letter may have been misread';
       b.onclick = () => this.acceptSuggestion(item.word);
+      list.appendChild(b);
+    }
+    if (showFix) {
+      const b = document.createElement('button');
+      b.className = 'suggest-chip corrected';
+      b.textContent = 'Fix with LLM';
+      b.title = 'Ask the local LLM to guess what word you meant';
+      b.onclick = () => this.fixCurrentWord();
       list.appendChild(b);
     }
   }
@@ -2703,6 +2713,7 @@ class App {
   }
   doClear() {
     this.word = ''; this.sentence = '';
+    this._polishHistory = [];
     if (this.translator) this.translator.onTextChanged('');
   }
   doVoice() { this.voice.toggle(); }
@@ -2719,6 +2730,17 @@ class App {
     }
   }
 
+  // Keep the last few polished sentences so follow-up polishes can reference
+  // them. Capped at 2 to keep prompts small and the model focused.
+  _pushPolishHistory(sentence) {
+    if (!this._polishHistory) this._polishHistory = [];
+    this._polishHistory.push(sentence);
+    while (this._polishHistory.length > 2) this._polishHistory.shift();
+  }
+  _polishContext() {
+    return (this._polishHistory || []).join(' ');
+  }
+
   async doPolish() {
     if (!this._polishEnabled) return;
     const btn = document.getElementById('btnPolish');
@@ -2729,7 +2751,10 @@ class App {
     const origLabel = btn.textContent;
     btn.textContent = 'Polishing...';
     try {
-      const data = await api('/api/polish', { text: raw }, { timeout: 20000 });
+      const body = { text: raw };
+      const ctx = this._polishContext();
+      if (ctx) body.context = ctx;
+      const data = await api('/api/polish', body, { timeout: 20000 });
       const polished = (data && data.polished) || '';
       if (polished) {
         this.sentence = polished;
@@ -2737,6 +2762,7 @@ class App {
         document.getElementById('transText').innerHTML = this.esc(polished) + '<span class="cursor"></span>';
         document.getElementById('wordText').textContent = '...';
         if (this.translator) this.translator.onTextChanged(polished);
+        this._pushPolishHistory(polished);
         this.log('Polished: "' + polished + '"', 'sentence');
         showToast('Polished with ' + (data.model || 'local LLM'), 'success', 2000);
       } else {
@@ -2747,6 +2773,34 @@ class App {
     }
     btn.disabled = false;
     btn.textContent = origLabel;
+  }
+
+  // Ollama-powered single-word fix: send the current typed letters plus any
+  // recent polished sentences as context, replace this.word with the model's
+  // guess. Called from a chip in the suggestion bar.
+  async fixCurrentWord() {
+    if (!this._polishEnabled) return;
+    const letters = (this.word || '').trim();
+    if (letters.length < 2) { showToast('Spell at least two letters first.', 'info', 1600); return; }
+    if (this._fixing) return;
+    this._fixing = true;
+    try {
+      const body = { letters: letters };
+      const ctx = (this.sentence || this._polishContext() || '').trim();
+      if (ctx) body.context = ctx;
+      const data = await api('/api/correct-word', body, { timeout: 10000 });
+      const w = (data && data.word) || '';
+      if (!w) { showToast('No fix suggested.', 'info', 1600); this._fixing = false; return; }
+      if (w.toLowerCase() === letters.toLowerCase()) {
+        showToast('Already spelled correctly.', 'info', 1600);
+      } else {
+        this.acceptSuggestion(w.toUpperCase());
+        showToast('Fixed: ' + letters + ' → ' + w, 'success', 2200);
+      }
+    } catch (e) {
+      showToast('Fix failed: ' + e.message, 'warn', 2500);
+    }
+    this._fixing = false;
   }
 
   doSpeak() {
