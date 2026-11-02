@@ -21,7 +21,7 @@
 </p>
 
 **Live app:** [https://vani-setu.onrender.com](https://vani-setu.onrender.com)  
-Open the link → **Continue as guest** → **Start camera** (allow the webcam). The Free Render instance sleeps after idle time; the first load can take about a minute.
+Open the link → **Create an account** → **Sign in** → **Start camera** (allow the webcam). The Free Render instance sleeps after idle time; the first load can take about a minute.
 
 A laptop camera tracks one or two hands in the browser. Machine learning turns them into fingerspelled letters or whole signs, the app builds a sentence (with word prediction that can fix a misread letter), speaks it, and shows it in English and Hindi. A built-in **Dictionary** shows how to make every letter and sign.
 
@@ -197,7 +197,7 @@ Double-click `Sign-Language-Interpreter-using-Deep-Learning-master/RUN_VANI_SETU
 | `Code/models/sign_svm.joblib` | Yes | Spell-mode SVM bundle (model, feature version, threshold). Present after `git clone`. |
 | `Code/hand_landmarker.task` | No (~7.5 MB) | MediaPipe hand model. The server **downloads it on first run** if missing. |
 
-`users.db` stays local and gitignored. A hosted demo uses guest login so it does not depend on that file.
+`users.db` stays local and gitignored. The hosted demo uses the same SQLite file (recreated empty on each cold start) or a Postgres addon via `DATABASE_URL`.
 
 Keep this project folder for the viva. GitHub now has the letter model; you do not need a USB copy of `sign_svm.joblib`.
 
@@ -213,8 +213,7 @@ Localhost does not change. To redeploy after a code push:
 2. Or [render.com](https://render.com) → **New** → **Web Service**:
    - Build: `pip install -r requirements.txt`
    - Start: `bash start.sh`
-   - `AUTH_MODE=guest`
-3. Open the `https://` URL → **Continue as guest** → **Start camera**.
+3. Open the `https://` URL → **Create account** → **Sign in** → **Start camera**.
 
 Full notes: [DEPLOY.md](DEPLOY.md). Free Render apps sleep after idle time; the first hit after sleep can take about a minute.
 
@@ -243,18 +242,14 @@ Then open **http://127.0.0.1:5001**. Accounts in `users.db` stay on disk. Nothin
 
 ---
 
-## Auth options
+## Login
 
-Default is **password**. Copy `Code/.env.example` to `Code/.env` only if you need to change this.
+Email + password only, hashed with Werkzeug's PBKDF2 (`User.set_password` /
+`check_password`) and stored in a local SQLite file (`Code/users.db`) or in
+Postgres if `DATABASE_URL` is set. There is no OTP, no guest skip, no
+third-party sign-in — one form, two buttons (**Sign in** / **Create account**).
 
-| `AUTH_MODE` | Behaviour |
-|-------------|-----------|
-| `password` | Email + password (SQLite). **Default.** |
-| `guest` | Password login plus **Continue as guest**. |
-| `otp` | Email / terminal 6-digit code (needs SMTP for real email). |
-| `none` | Skip the login screen. |
-
-Hosted deploy notes (Render, HTTPS, guest login): see [DEPLOY.md](DEPLOY.md).
+Hosted deploy notes (Render, HTTPS, Postgres): see [DEPLOY.md](DEPLOY.md).
 
 ---
 
@@ -367,7 +362,7 @@ installed are unaffected.
 ## More docs
 
 - [DEMO_AND_VIVA.md](DEMO_AND_VIVA.md) — what to show an examiner
-- [DEPLOY.md](DEPLOY.md) — guest mode, skip login, Gmail OTP, Postgres
+- [DEPLOY.md](DEPLOY.md) — HTTPS on Render, optional Postgres for persistent accounts
 - [Sign-Language-Interpreter-using-Deep-Learning-master/DOCUMENTATION.md](Sign-Language-Interpreter-using-Deep-Learning-master/DOCUMENTATION.md) — older architecture write-up
 - Original hackathon app (CNN / OpenCV, not the web demo): [Sign-Language-Interpreter-using-Deep-Learning-master/README.md](Sign-Language-Interpreter-using-Deep-Learning-master/README.md)
 

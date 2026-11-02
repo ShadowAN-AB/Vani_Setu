@@ -9,8 +9,6 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.13"
-      - key: AUTH_MODE
-        value: guest
       - key: HOST
         value: "0.0.0.0"
       - key: MPLBACKEND

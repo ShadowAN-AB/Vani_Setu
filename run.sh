@@ -50,5 +50,5 @@ fi
 
 export PORT="${PORT:-5001}"
 echo "Vani-Setu -> http://127.0.0.1:${PORT}"
-echo "Auth: ${AUTH_MODE:-password}  (set AUTH_MODE=guest for a skip-login button)"
+echo "Login: email + password (stored in Code/users.db)"
 python server.py

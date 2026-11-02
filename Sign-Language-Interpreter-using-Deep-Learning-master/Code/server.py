@@ -4,16 +4,11 @@ Vani-Setu backend: password auth, translation, landmark collection, and ML class
 
 import json
 import os
-import random
 import re
-import string
 import subprocess
 import sys
 import time
-import smtplib
 import urllib.request
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from threading import Lock
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -71,33 +66,15 @@ def _on_paas():
     )
 
 
-SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
-SMTP_USER = os.environ.get("SMTP_USER", "").strip()
-SMTP_PASS = os.environ.get("SMTP_PASS", "").strip()
-SENDER_NAME = "Vani-Setu"
 PORT = int(os.environ.get("PORT", "5001"))
 HOST = os.environ.get("HOST", "0.0.0.0" if _on_paas() else "127.0.0.1").strip() or (
     "0.0.0.0" if _on_paas() else "127.0.0.1"
 )
-# password = email + password stored in SQLite (or DATABASE_URL Postgres)
-# otp      = email code if SMTP is set, otherwise the terminal (local only)
-# guest    = password/OTP plus a "Continue as guest" button
-# none     = skip the login screen entirely
-AUTH_MODE = os.environ.get("AUTH_MODE", "password").strip().lower()
-if AUTH_MODE not in ("password", "otp", "guest", "none"):
-    AUTH_MODE = "password"
-EMAIL_CONFIGURED = bool(SMTP_USER and SMTP_PASS)
 
 # Recording samples and retraining change the shared model, so they are on for
 # localhost and off on a public host unless ALLOW_TRAINING=1 is set explicitly.
 _allow = os.environ.get("ALLOW_TRAINING", "").strip().lower()
 TRAINING_ENABLED = (_allow in ("1", "true", "yes")) if _allow else not _on_paas()
-
-OTP_LENGTH = 6
-OTP_EXPIRY_SECONDS = 300
-MAX_ATTEMPTS = 5
-RATE_LIMIT_SECONDS = 60
 
 # The app translates the sentence into Hindi only; English is the source language.
 SUPPORTED_LANGUAGES = {"en": "English", "hi": "Hindi"}
@@ -111,8 +88,6 @@ POLISH_MAX_INPUT = 240
 polish_cache = {}
 polish_lock = Lock()
 
-otp_store = {}
-store_lock = Lock()
 translation_cache = {}
 cache_lock = Lock()
 csv_lock = Lock()
@@ -176,51 +151,6 @@ def load_ml_model():
         with model_lock:
             ml_model, ml_info = None, {}
         print(f"  [WARN] Could not load model: {e}")
-
-
-def generate_otp():
-    return "".join(random.choices(string.digits, k=OTP_LENGTH))
-
-
-def cleanup_expired():
-    now = time.time()
-    expired = [k for k, v in otp_store.items() if now - v["created_at"] > OTP_EXPIRY_SECONDS]
-    for k in expired:
-        del otp_store[k]
-
-
-def send_email_otp(email, otp):
-    if not SMTP_USER or not SMTP_PASS:
-        print(f"\n{'=' * 50}")
-        print(f"  OTP for {email}: {otp}")
-        print("  (Email not configured — use the code above)")
-        print(f"{'=' * 50}\n")
-        return False
-
-    try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = f"Vani-Setu Login OTP: {otp}"
-        msg["From"] = f"{SENDER_NAME} <{SMTP_USER}>"
-        msg["To"] = email
-        html = f"""
-        <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px;">
-          <h2>Vani-Setu</h2>
-          <p>Your verification code:</p>
-          <p style="font-size:28px;letter-spacing:8px;font-weight:800;">{otp}</p>
-          <p>Expires in 5 minutes.</p>
-        </div>
-        """
-        msg.attach(MIMEText(html, "html"))
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=12) as server:
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASS)
-            server.sendmail(SMTP_USER, email, msg.as_string())
-        print(f"  [OK] OTP email sent to {email}")
-        return True
-    except Exception as e:
-        print(f"  [ERROR] Email send failed: {e}")
-        print(f"  OTP for {email}: {otp} (console fallback)")
-        return False
 
 
 def offline_translate(text, target):
@@ -297,14 +227,9 @@ def _training_disabled():
 
 @app.route("/api/auth-config", methods=["GET"])
 def auth_config():
-    return jsonify({
-        "success": True,
-        "mode": AUTH_MODE,
-        "email_configured": EMAIL_CONFIGURED,
-        "guest_allowed": AUTH_MODE in ("guest", "none"),
-        "password_enabled": AUTH_MODE in ("password", "guest"),
-        "otp_enabled": AUTH_MODE in ("otp", "guest"),
-    })
+    # Preserved so the frontend's one-fetch probe still works; auth is now
+    # email + password only, no OTP, no guest, no SMTP.
+    return jsonify({"success": True, "mode": "password", "password_enabled": True})
 
 
 def _valid_email(email):
@@ -343,94 +268,6 @@ def password_login():
     if not user or not user.check_password(password):
         return jsonify({"success": False, "message": "Invalid email or password"}), 401
     return jsonify({"success": True, "message": "Signed in.", "email": user.email})
-
-
-@app.route("/api/guest-login", methods=["POST"])
-def guest_login():
-    if AUTH_MODE not in ("guest", "none"):
-        return jsonify({"success": False, "message": "Guest login is disabled"}), 403
-    return jsonify({"success": True, "email": "guest@vani-setu.local", "message": "Continuing as guest"})
-
-
-@app.route("/api/send-otp", methods=["POST"])
-def send_otp():
-    data = request.get_json(silent=True)
-    if not data or "email" not in data:
-        return jsonify({"success": False, "message": "Email is required"}), 400
-
-    email = str(data.get("email") or "").strip().lower()
-    if not _valid_email(email):
-        return jsonify({"success": False, "message": "Invalid email format"}), 400
-
-    # OTP is only available when the deploy opts into it. In password-only mode
-    # the endpoint is a no-op; without this gate anyone could trigger a code for
-    # any address (and read it from the console on an SMTP-less server).
-    if AUTH_MODE not in ("otp", "guest"):
-        return jsonify({"success": False, "message": "OTP login is disabled"}), 403
-
-    # Only send a code for emails that already have an account. Otherwise send_otp
-    # is a self-service registration under a login button, which it is not.
-    if not User.query.filter_by(email=email).first():
-        # Deliberately generic - do not leak which emails are registered.
-        return jsonify({"success": False, "message": "No account for that email"}), 404
-
-    with store_lock:
-        cleanup_expired()
-        if email in otp_store:
-            elapsed = time.time() - otp_store[email]["created_at"]
-            if elapsed < RATE_LIMIT_SECONDS:
-                remaining = int(RATE_LIMIT_SECONDS - elapsed)
-                return jsonify({
-                    "success": False,
-                    "message": f"Please wait {remaining}s before requesting a new OTP",
-                }), 429
-
-        otp = generate_otp()
-        otp_store[email] = {"otp": otp, "created_at": time.time(), "attempts": 0}
-        print(f"  [OTP] {email} -> {otp}", flush=True)
-
-    emailed = send_email_otp(email, otp)
-    message = (
-        "OTP sent to your email."
-        if emailed
-        else "OTP printed in the server terminal (email is not configured)."
-    )
-    return jsonify({"success": True, "message": message, "console_otp": not emailed})
-
-
-@app.route("/api/verify-otp", methods=["POST"])
-def verify_otp():
-    data = request.get_json(silent=True)
-    if not data or "email" not in data or "otp" not in data:
-        return jsonify({"success": False, "message": "Email and OTP are required"}), 400
-
-    email = str(data.get("email") or "").strip().lower()
-    user_otp = str(data.get("otp") or "").strip()
-
-    if AUTH_MODE not in ("otp", "guest"):
-        return jsonify({"success": False, "message": "OTP login is disabled"}), 403
-    if not _valid_email(email):
-        return jsonify({"success": False, "message": "Invalid email format"}), 400
-    if not User.query.filter_by(email=email).first():
-        return jsonify({"success": False, "message": "No account for that email"}), 404
-
-    with store_lock:
-        cleanup_expired()
-        if email not in otp_store:
-            return jsonify({"success": False, "message": "OTP expired or not found. Request a new one."}), 400
-        entry = otp_store[email]
-        if time.time() - entry["created_at"] > OTP_EXPIRY_SECONDS:
-            del otp_store[email]
-            return jsonify({"success": False, "message": "OTP has expired. Request a new one."}), 400
-        if entry["attempts"] >= MAX_ATTEMPTS:
-            del otp_store[email]
-            return jsonify({"success": False, "message": "Too many attempts. Request a new OTP."}), 400
-        if user_otp == entry["otp"]:
-            del otp_store[email]
-            return jsonify({"success": True, "message": "Login successful! Welcome to Vani-Setu."})
-        entry["attempts"] += 1
-        remaining = MAX_ATTEMPTS - entry["attempts"]
-        return jsonify({"success": False, "message": f"Incorrect OTP. {remaining} attempts remaining."}), 400
 
 
 @app.route("/api/translate", methods=["POST"])
@@ -667,8 +504,6 @@ def health():
         "dataset_letters": dataset.counts("letter"),
         "hand_model_file": os.path.exists(os.path.join(APP_DIR, "hand_landmarker.task")),
         "translator": TRANSLATOR_AVAILABLE,
-        "email_configured": EMAIL_CONFIGURED,
-        "auth_mode": AUTH_MODE,
         "polish_enabled": _polish_available(),
         "polish_model": OLLAMA_MODEL if _polish_available() else None,
     }
@@ -850,17 +685,7 @@ if __name__ == "__main__":
     print()
     print("  +===============================================+")
     print("  |     Vani-Setu                                 |")
-    print(f"  |     Auth: {AUTH_MODE:<36} |")
-    if AUTH_MODE == "password":
-        print("  |     Login: email + password (SQLite)          |")
-    elif AUTH_MODE == "guest":
-        print("  |     Guest login enabled                       |")
-    elif AUTH_MODE == "none":
-        print("  |     Login screen skipped                      |")
-    elif EMAIL_CONFIGURED:
-        print(f"  |     Email: {SMTP_USER[:34]:<34} |")
-    else:
-        print("  |     OTP: terminal (set SMTP or AUTH_MODE)     |")
+    print("  |     Login: email + password (SQLite)          |")
     print(f"  |     ML model: {'loaded':<32} |" if ml_model is not None else "  |     ML model: not trained yet               |")
     print(f"  |     http://{HOST}:{PORT:<22} |")
     print("  +===============================================+")

@@ -1,15 +1,15 @@
 # Deploying Vani-Setu
 
-**Live demo:** [https://vani-setu.onrender.com](https://vani-setu.onrender.com)  
-Continue as guest → Start camera. The Free instance may take a minute to wake.
+**Live demo:** [https://vani-setu.onrender.com](https://vani-setu.onrender.com)
+Create an account → Sign in → Start camera. The Free instance may take a minute to wake.
 
-**Localhost still works the same way.** From this folder:
+**Localhost works the same way:**
 
 ```bash
 ./run.sh
 ```
 
-Open **http://127.0.0.1:5001**, create an account or sign in. Deploy settings below do **not** change that unless you set them in `Code/.env`.
+Open **http://127.0.0.1:5001**, create an account or sign in.
 
 ---
 
@@ -20,11 +20,9 @@ Open **http://127.0.0.1:5001**, create an account or sign in. Deploy settings be
 | Address | `127.0.0.1:5001` | `https://….onrender.com` |
 | Camera | allowed on `http://127.0.0.1` | **needs HTTPS** (Render gives this) |
 | Bind | `127.0.0.1` | `0.0.0.0` (auto when `RENDER` is set) |
-| Login | email + password (SQLite) | **Continue as guest** (`AUTH_MODE=guest`) so a wiped disk does not lock people out |
+| Login | email + password (SQLite) | email + password (SQLite, or Postgres via `DATABASE_URL`) |
 | Hand model | already on this Mac | downloaded on first boot if missing |
 | Letter SVM | local file | shipped in git (`models/sign_svm.joblib`) |
-
-Do not use terminal OTP on a host — nobody can read the server log.
 
 ---
 
@@ -32,7 +30,7 @@ Do not use terminal OTP on a host — nobody can read the server log.
 
 1. Push this repo to GitHub (already: [ShadowAN-AB/Vani_Setu](https://github.com/ShadowAN-AB/Vani_Setu)).
 2. Sign in at [https://render.com](https://render.com) with GitHub.
-3. **New** → **Blueprint** → pick `Vani_Setu`.  
+3. **New** → **Blueprint** → pick `Vani_Setu`.
    Or **New** → **Web Service** → connect the repo, then:
    - **Build:** `pip install -r requirements.txt`
    - **Start:** `bash start.sh`
@@ -40,22 +38,21 @@ Do not use terminal OTP on a host — nobody can read the server log.
 4. Environment (Blueprint already sets these):
 
 ```
-AUTH_MODE=guest
 HOST=0.0.0.0
-PYTHON_VERSION=3.12.8
+PYTHON_VERSION=3.13
 MPLBACKEND=Agg
 ```
 
 Leave `PORT` to Render.
 
 5. After the first deploy finishes, open the `https://….onrender.com` URL.
-6. Click **Continue as guest**, then **Start camera**, and allow the webcam.
+6. Create an account, sign in, click **Start camera**, allow the webcam.
 
 Free Render apps **sleep after ~15 minutes**. The first request after sleep can take a minute. Camera still works after it wakes.
 
-### Optional: real accounts on the host
+### Optional: Postgres for persistent accounts
 
-Add a Render **Postgres** addon and set `DATABASE_URL` to the URL they give you. Change `AUTH_MODE` to `password`. Also `pip install psycopg2-binary` (or add it to `requirements_web.txt`). `postgres://` is rewritten to `postgresql://`.
+Add a Render **Postgres** addon and set `DATABASE_URL` to the URL they give you. Also `pip install psycopg2-binary` (or add it to `requirements_web.txt`). `postgres://` is rewritten to `postgresql://`.
 
 ---
 
@@ -65,33 +62,20 @@ Add a Render **Postgres** addon and set `DATABASE_URL` to the URL they give you.
 
 ---
 
-## Auth modes (local or host)
-
-| `AUTH_MODE` | Behaviour |
-|-------------|-----------|
-| `password` | Email + password. **Local default.** |
-| `guest` | Password login plus **Continue as guest**. **Render default.** |
-| `otp` | Email / terminal 6-digit code (local only unless SMTP is set). |
-| `none` | Skip the login screen. |
-
-Gmail OTP (optional): App password, not your normal Gmail password. See `Code/.env.example`.
-
----
-
 ## Files
 
 - Never commit `.env` or `users.db`.
-- `hand_landmarker.task` stays gitignored; the server downloads it if missing.
+- `hand_landmarker.task` is tracked in git for a fast cold start.
 - `models/sign_svm.joblib` is in git so Spell mode works on a fresh host.
 - Recording and retraining are off on public hosts. Set `ALLOW_TRAINING=1` only if you really want visitors to change the model.
 
 ---
 
-## Quick local test (unchanged)
+## Quick local test
 
 ```bash
 cd Sign-Language-Interpreter-using-Deep-Learning-master/Code
-AUTH_MODE=password PORT=5001 .venv/bin/python server.py
+PORT=5001 .venv/bin/python server.py
 ```
 
 Open http://127.0.0.1:5001 — **Create account**, then **Sign in**.
