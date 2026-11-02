@@ -1855,8 +1855,8 @@ class App {
     // loop has started. _starting prevents a double-click opening two streams.
     this._loopGen = 0;
     this._starting = false;
-    this._mlStamp = 0;         // bumped on every classify response
-    this._lastPushedStamp = 0; // what the vote buffer most recently saw
+    this._mlStamp = 0;    // bumped on every classify response (debug / tests)
+    this._mlRespAt = 0;   // performance.now() of the most recent response
   }
 
   async init() {
@@ -2351,7 +2351,7 @@ class App {
   resetMl() {
     this._mlLabel = null; this._mlTop = null; this._mlKind = null;
     this._mlConf = 0; this._mlMs = 0; this._mlBusy = false;
-    this._mlStamp = 0; this._lastPushedStamp = 0;
+    this._mlStamp = 0; this._mlRespAt = 0;
     const row = document.getElementById('confRow');
     if (row) row.style.display = 'none';
   }
@@ -2556,18 +2556,20 @@ class App {
             this._mlTop = result.label;
             this._mlConf = result.confidence;
             this._mlKind = result.kind;
-            this._mlStamp = (this._mlStamp | 0) + 1;   // mark this as a fresh result
+            this._mlStamp = (this._mlStamp | 0) + 1;
+            this._mlRespAt = performance.now();   // freshness clock
           }
         }).finally(() => { this._mlBusy = false; });
       }
-      // Only forward a classify RESULT once. On every subsequent frame until the
-      // next response arrives, vote '?' so the 14-frame temporal buffer actually
-      // measures "the hand held this sign for ~1 s", not "the request round-trip
-      // was slow enough to look like 1 s".
+      // Push the live ML label into the vote buffer every frame while the most
+      // recent response is still "fresh" (< 400 ms old). This lets the 14-frame
+      // buffer actually accumulate 9+ identical votes at normal classify rates
+      // (~7/sec), while still refusing to commit a stale label if the server
+      // has stopped responding - after 400 ms we vote '?' instead.
       let forced = '?';
-      if (useMl && this._mlKind === kind && this._mlStamp !== this._lastPushedStamp) {
+      if (useMl && this._mlKind === kind && this._mlLabel
+          && (performance.now() - (this._mlRespAt || 0)) < 400) {
         forced = this._mlLabel;
-        this._lastPushedStamp = this._mlStamp;
       } else if (!useMl) {
         forced = null;    // let the rule path produce the vote itself
       }

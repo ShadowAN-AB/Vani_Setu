@@ -274,7 +274,11 @@ def _handle_500(e):
 
 @app.route("/")
 def index():
-    return send_from_directory(APP_DIR, "index.html")
+    # The whole app is one HTML file; browsers caching an older copy means a
+    # fix pushed on the server never reaches the user. Tell the browser not to.
+    resp = send_from_directory(APP_DIR, "index.html")
+    resp.headers["Cache-Control"] = "no-store, max-age=0"
+    return resp
 
 
 @app.route("/<path:filename>")
