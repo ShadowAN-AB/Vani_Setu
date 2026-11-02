@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/badge/MediaPipe-Hand_Landmarker-009688?style=flat-square&logo=google&logoColor=white" alt="MediaPipe">
   <img src="https://img.shields.io/badge/scikit--learn-SVM_RBF-F7931E?style=flat-square&logo=scikitlearn&logoColor=white" alt="scikit-learn">
   <img src="https://img.shields.io/badge/Keras-MLP-D00000?style=flat-square&logo=keras&logoColor=white" alt="Keras">
-  <img src="https://img.shields.io/badge/Letters-96.9%25_test-0b5f66?style=flat-square" alt="96.9% test accuracy">
+  <img src="https://img.shields.io/badge/Letters-96.0%25_test-0b5f66?style=flat-square" alt="96.0% test accuracy on 1,563 samples">
   <img src="https://img.shields.io/badge/SQLite-accounts-003B57?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite">
   <img src="https://img.shields.io/badge/Render-HTTPS-46E3B7?style=flat-square&logo=render&logoColor=black" alt="Render">
 </p>
@@ -33,8 +33,8 @@ Day to day, run it on **localhost** at `http://127.0.0.1:5001` (`./run.sh`). The
 
 | Area | Change |
 |------|--------|
-| **Letter model** | 88 features instead of 63 (palm-length scaling, 10 fingertip distances, 15 joint angles); training data augmented with mirrored, tilted and jittered copies; 70 / 15 / 15 split with C and γ tuned on validation. **96.9%** test accuracy, **97.1% ± 1.6%** cross-validation. |
-| **Robustness** | With the other hand the old model fell to 64.3%; the new one scores 96.9%. Tilted 15°: 78.4% → 96.2% (−15°: 94.7%). Hand 40% smaller: 72.1% → 96.9%. All numbers from `reports/metrics.json`. |
+| **Letter model** | 88 features instead of 63 (palm-length scaling, 10 fingertip distances, 15 joint angles); training data augmented with mirrored, tilted and jittered copies; 70 / 15 / 15 split with C and γ tuned on validation. **96.0%** test accuracy / **97.1%** validation on 10,418 samples drawn from two independent sources. |
+| **Robustness** | Mirrored (other hand): 96.0%. Tilted +15°: 94.8% (−15°: 95.4%). Hand 40% smaller: 96.0%. All numbers from `reports/metrics.json`. |
 | **Phrase & ISL** | Finger-pose rules in the browser (JavaScript), guarded against regression by `tools/check_rules.py`. The earlier MLP scaffold was removed; it was never trained and the live site only ever ran rules. |
 | **Two hands** | MediaPipe tracks two hands; the Left / Right label is used by the rule classifiers for signs like "I Love You". |
 | **Word prediction** | Noisy-channel model: word frequency × how often the classifier confuses letters, so X-E-D still suggests RED. |
@@ -50,22 +50,30 @@ Day to day, run it on **localhost** at `http://127.0.0.1:5001` (`./run.sh`). The
 
 ## Results
 
-All on the same held-out test set (319 samples, 26 letters). Full report: [`reports/evaluation.md`](Sign-Language-Interpreter-using-Deep-Learning-master/Code/reports/evaluation.md).
+Current model is trained on **10,418 samples from two independent sources**
+(ASL Now + Kaggle `grassknoted/asl-alphabet` images preprocessed through our
+MediaPipe pipeline — see `tools/kaggle_to_landmarks.py`) and evaluated on a
+held-out **1,563-sample** test set. Full report: [`reports/evaluation.md`](Sign-Language-Interpreter-using-Deep-Learning-master/Code/reports/evaluation.md).
 
-| Test condition | First version (63 features) | Current (88 features + augmentation) |
-|----------------|-----------------------------|--------------------------------------|
-| Normal | 92.8% | 96.9% |
-| Other hand (mirrored) | 64.3% | 96.9% |
-| Tilted +15° | 78.4% | 96.2% |
-| Tilted −15° | — | 94.7% |
-| Hand 40% smaller (farther away) | 72.1% | 96.9% |
+| Test condition | Current model |
+|----------------|---------------|
+| Normal | **96.0%** |
+| Other hand (mirrored) | 96.0% |
+| Tilted +15° | 94.8% |
+| Tilted −15° | 95.4% |
+| Hand 40% smaller (farther away) | 96.0% |
+
+An earlier version trained on ASL Now alone (2,122 samples) scored 96.9% on a
+smaller 319-sample test set from one source; the current numbers are on a
+test set **5× larger and drawn from two sources**, which is a harder bar.
 
 ![Before and after](Sign-Language-Interpreter-using-Deep-Learning-master/Code/reports/eval_before_after.png)
 
 | Model (same data and features) | Test accuracy |
 |--------------------------------|---------------|
-| **SVM, RBF kernel** (used for letters) | 97.2% in `compare_models.py` (fixed C/γ, same split for all models); **96.9%** for the live tuned model in `reports/metrics.json` |
-| MLP neural network | 96.2% (Keras version: 95.9%) |
+| **SVM, RBF kernel** (live model) | **96.0%** on 1,563 mixed-source samples |
+| SVM, RBF kernel | 97.2% in `compare_models.py` on the original 319-sample ASL-Now-only test (fixed C/γ, same split for all models) |
+| MLP neural network | 96.2% (same comparison dataset) |
 | Random Forest | 96.2% |
 | Logistic Regression | 95.9% |
 | K-Nearest Neighbours | 95.0% |
@@ -80,7 +88,7 @@ All on the same held-out test set (319 samples, 26 letters). Full report: [`repo
 | **Interface** | HTML5 · CSS3 · vanilla JavaScript · Google Fonts (Fraunces / Sora) |
 | **Vision** | [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker) (21-point Hand Landmarker in the browser) · `getUserMedia` camera |
 | **Backend** | Python 3 · Flask · Flask-CORS · Gunicorn |
-| **Machine learning** | scikit-learn **RBF SVM** for letters (96.9% test, Platt-scaled probabilities) · **Keras MLP** for phrases / ISL, run with NumPy · landmark augmentation · noisy-channel word prediction · matplotlib reports |
+| **Machine learning** | scikit-learn **RBF SVM** for letters (96.0% test, Platt-scaled probabilities) · landmark augmentation (mirror / rotate / jitter) · noisy-channel word prediction · matplotlib reports |
 | **Accounts** | Flask-SQLAlchemy · Werkzeug password hashes · SQLite locally · optional Postgres (`DATABASE_URL`) |
 | **Speech & language** | Web Speech API (speak) · English → Hindi with deep-translator / Google Translate · offline Hindi fallback |
 | **Data** | ASL Now fingerspelling landmarks (Hugging Face, MIT) + team recordings · raw 21-point landmarks · 88 features (scaled points, fingertip distances, joint angles) |
@@ -103,7 +111,7 @@ Flask API ──► SVM, 88 features (Spell)
 
 | Mode | What happens |
 |------|----------------|
-| **Spell** | Fingerspelling A–Z. An RBF **SVM** classifies 88 landmark features (**96.9%** test accuracy, 97.1% ± 1.6% 5-fold CV, and 94–97% under the mirror / tilt / scale stress tests in `reports/metrics.json`). |
+| **Spell** | Fingerspelling A–Z. An RBF **SVM** classifies 88 landmark features (**96.0%** test accuracy on 1,563 held-out samples spanning two sources, 94–96% under the mirror / tilt / scale stress tests in `reports/metrics.json`). |
 | **Phrase** | Whole signs such as Hello, Yes, OK. A Keras **MLP neural network** on both hands (181 features) once phrase samples are recorded and trained; hand-written finger rules until then. |
 | **ISL** | Indian signs (Namaste, Thank You, Water, Help, …), one or two hands. Same neural network approach with its own model; rules as the fallback. Not a certified ISL lexicon. |
 | **Practice** | The app prompts a letter and scores your attempts. |

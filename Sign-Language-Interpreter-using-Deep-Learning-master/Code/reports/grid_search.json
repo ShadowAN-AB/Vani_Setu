@@ -3,93 +3,93 @@
     "C": 3,
     "gamma": "scale",
     "val_accuracy": 0.9687,
-    "val_macro_f1": 0.971,
-    "fit_seconds": 0.45
+    "val_macro_f1": 0.9671,
+    "fit_seconds": 7.66
   },
   "results": [
     {
       "C": 3,
       "gamma": "scale",
       "val_accuracy": 0.9687,
-      "val_macro_f1": 0.971,
-      "fit_seconds": 0.45
+      "val_macro_f1": 0.9671,
+      "fit_seconds": 7.66
     },
     {
       "C": 3,
       "gamma": 0.01,
-      "val_accuracy": 0.9687,
-      "val_macro_f1": 0.971,
-      "fit_seconds": 0.43
+      "val_accuracy": 0.968,
+      "val_macro_f1": 0.9665,
+      "fit_seconds": 6.84
     },
     {
       "C": 3,
       "gamma": 0.03,
-      "val_accuracy": 0.9655,
-      "val_macro_f1": 0.9675,
-      "fit_seconds": 0.68
+      "val_accuracy": 0.9687,
+      "val_macro_f1": 0.9664,
+      "fit_seconds": 9.3
     },
     {
       "C": 10,
       "gamma": "scale",
       "val_accuracy": 0.9687,
-      "val_macro_f1": 0.971,
-      "fit_seconds": 0.42
+      "val_macro_f1": 0.9666,
+      "fit_seconds": 5.34
     },
     {
       "C": 10,
       "gamma": 0.01,
-      "val_accuracy": 0.9687,
-      "val_macro_f1": 0.971,
-      "fit_seconds": 0.4
+      "val_accuracy": 0.9667,
+      "val_macro_f1": 0.9647,
+      "fit_seconds": 4.4
     },
     {
       "C": 10,
       "gamma": 0.03,
-      "val_accuracy": 0.9624,
-      "val_macro_f1": 0.9642,
-      "fit_seconds": 0.67
+      "val_accuracy": 0.968,
+      "val_macro_f1": 0.9656,
+      "fit_seconds": 6.96
     },
     {
       "C": 30,
       "gamma": "scale",
       "val_accuracy": 0.9687,
-      "val_macro_f1": 0.971,
-      "fit_seconds": 0.42
+      "val_macro_f1": 0.9668,
+      "fit_seconds": 4.49
     },
     {
       "C": 30,
       "gamma": 0.01,
-      "val_accuracy": 0.9687,
-      "val_macro_f1": 0.971,
-      "fit_seconds": 0.4
+      "val_accuracy": 0.968,
+      "val_macro_f1": 0.9662,
+      "fit_seconds": 4.23
     },
     {
       "C": 30,
       "gamma": 0.03,
-      "val_accuracy": 0.9624,
-      "val_macro_f1": 0.9642,
-      "fit_seconds": 0.67
+      "val_accuracy": 0.968,
+      "val_macro_f1": 0.9656,
+      "fit_seconds": 6.95
     },
     {
       "C": 100,
       "gamma": "scale",
-      "val_accuracy": 0.9687,
-      "val_macro_f1": 0.971,
-      "fit_seconds": 0.43
+      "val_accuracy": 0.968,
+      "val_macro_f1": 0.966,
+      "fit_seconds": 4.32
     },
     {
       "C": 100,
       "gamma": 0.01,
-      "val_accuracy": 0.9687,
-      "val_macro_f1": 0.971,
-      "fit_seconds": 0.41
+      "val_accuracy": 0.9674,
+      "val_macro_f1": 0.9653,
+      "fit_seconds": 4.16
     },
     {
       "C": 100,
       "gamma": 0.03,
-      "val_accuracy": 0.9655,
-      "val_macro_f1": 0.9675,
-      "fit_seconds": 0.69
+      "val_accuracy": 0.968,
+      "val_macro_f1": 0.9655,
+      "fit_seconds": 6.89
     }
   ],
   "feature_version": 2,

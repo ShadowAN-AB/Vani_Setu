@@ -1,3 +1,6 @@
 # Extra packages for training on a laptop. The web server (requirements_web.txt) does not need these.
 #   pip install -r requirements_web.txt -r requirements_train.txt
 wordfreq>=3.1           # only to rebuild dataset/word_frequencies.csv (build_wordlist.py)
+mediapipe>=1.0          # only to re-extract Kaggle image landmarks (tools/kaggle_to_landmarks.py)
+opencv-python>=4.9      # image I/O for the same preprocessor
+kaggle>=1.6             # CLI to fetch the Kaggle ASL Alphabet dataset in the first place

@@ -32,6 +32,9 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(APP_DIR, "dataset")
 ASL_NOW_DIR = os.path.join(DATA_DIR, "raw_asl_now")
 ASL_NOW_CSV = os.path.join(DATA_DIR, "asl_now_landmarks.csv")
+# Landmarks extracted from the Kaggle "grassknoted/asl-alphabet" image dataset
+# via tools/kaggle_to_landmarks.py. Optional - absent until the script runs.
+KAGGLE_ASL_CSV = os.path.join(DATA_DIR, "kaggle_asl_landmarks.csv")
 RECORDINGS_DIR = os.path.join(DATA_DIR, "recordings")
 RECORDINGS_CSV = os.path.join(RECORDINGS_DIR, "samples.csv")
 
@@ -151,6 +154,8 @@ def _rows(kind, include_test, sources):
         rows += _read_rows(ASL_NOW_CSV)
     if "recorded" in sources:
         rows += _read_rows(RECORDINGS_CSV)
+    if "kaggle" in sources:
+        rows += _read_rows(KAGGLE_ASL_CSV)
     rows = [r for r in rows if r.get("kind") == kind and r.get("label")]
     if not include_test:
         rows = [r for r in rows if r.get("split") != "test"]
@@ -161,7 +166,7 @@ def _meta(rows):
     return [{k: r.get(k) or "" for k in META_COLUMNS} for r in rows]
 
 
-def load_samples(kind="letter", include_test=True, sources=("asl_now", "recorded")):
+def load_samples(kind="letter", include_test=True, sources=("asl_now", "recorded", "kaggle")):
     """
     First hand only, for the letter model.
       points: float array (N, 21, 3)
@@ -196,7 +201,7 @@ def load_two_hand_samples(kind="phrase", include_test=True, sources=("recorded",
 def counts(kind="letter", label=None):
     """Sample counts for the UI: total for a kind, or for one label."""
     total = 0
-    for path in (ASL_NOW_CSV, RECORDINGS_CSV):
+    for path in (ASL_NOW_CSV, RECORDINGS_CSV, KAGGLE_ASL_CSV):
         for r in _read_rows(path):
             if r.get("kind") == kind and (label is None or r.get("label") == label):
                 total += 1
