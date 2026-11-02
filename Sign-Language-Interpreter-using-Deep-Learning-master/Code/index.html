@@ -216,7 +216,7 @@
       letter-spacing: 0.1em; text-transform: uppercase;
       color: var(--muted); margin-bottom: 8px;
     }
-    .form-input, .captcha-input, .collect-bar select {
+    .form-input, .captcha-input {
       width: 100%; padding: 13px 14px;
       border-radius: var(--radius-sm);
       border: 1px solid var(--line);
@@ -488,22 +488,6 @@
     .pill-opt.active-phrase { background: var(--teal-soft); color: var(--teal-deep); }
     .pill-opt.active-spell { background: #d9eaf2; color: var(--sky); }
 
-    .collect-bar {
-      display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center;
-    }
-    .collect-bar select { width: auto; min-width: 120px; padding: 8px 10px; font-size: 12px; }
-    .collect-bar button {
-      padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line);
-      background: var(--surface); color: var(--ink); font-size: 12px; font-weight: 600;
-    }
-    .collect-bar input[type=text] {
-      width: 120px; padding: 8px 10px; font-size: 12px; border-radius: 8px;
-      border: 1px solid var(--line); background: var(--surface); color: var(--ink);
-    }
-    .collect-bar label.test-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
-    .collect-bar button.rec-on {
-      border-color: #efb4af; color: var(--danger); background: var(--danger-soft);
-    }
     .model-pill {
       margin-left: auto; margin-right: 8px;
       font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
@@ -980,17 +964,6 @@
                 <button class="pill-opt" id="pillPhrase">PHRASE</button>
                 <button class="pill-opt active-spell" id="pillSpell">SPELL</button>
               </div>
-            </div>
-            <div class="collect-bar">
-              <select id="collectLabel"></select>
-              <input type="text" id="collectSigner" placeholder="Signer name" maxlength="40" aria-label="Signer name">
-              <label class="test-toggle" title="Keep these samples out of training and use them to test the model on a new person">
-                <input type="checkbox" id="collectTest"> Test set
-              </label>
-              <button id="btnRecord">Record dataset</button>
-              <button id="btnTrain">Retrain model</button>
-              <span id="collectStat" style="font-size:11px;color:var(--muted);">0 samples</span>
-              <span id="collectHint" style="font-size:11px;color:var(--muted);">Aim for ~25 samples per sign</span>
             </div>
           </div>
         </div>
@@ -1842,7 +1815,7 @@ class App {
     this.signs = 0; this.words = 0; this.sents = 0;
     this.hl = null; this.vid = null; this.cvs = null; this.cx = null;
     this.fpsFrames = 0; this.fpsLast = performance.now(); this.fpsVal = 0;
-    this.mlReady = false; this.collecting = false; this.collectEvery = 0;
+    this.mlReady = false;
     this._mlKind = null;
     this.dictionary = null; this.dictTab = 'letter'; this.dictLang = 'en'; this.dictQuery = '';
     this._mlBusy = false; this._mlLabel = null; this._mlConf = 0; this._mlTop = null; this._mlMs = 0;
@@ -1954,12 +1927,6 @@ class App {
     document.querySelectorAll('#inputLangRow .lang-tab[data-input]').forEach(tab => {
       tab.onclick = () => this.setInputLang(tab.dataset.input);
     });
-    document.getElementById('btnRecord').onclick = () => this.toggleRecord();
-    try {
-      const savedSigner = localStorage.getItem('vani_signer');
-      if (savedSigner) document.getElementById('collectSigner').value = savedSigner;
-    } catch (e) { /* storage blocked */ }
-    document.getElementById('btnTrain').onclick = () => this.retrainModel();
     document.getElementById('btnPractice').onclick = () => this.startQuiz();
     document.getElementById('quizSkip').onclick = () => this.nextQuizTarget(true);
     document.getElementById('quizStop').onclick = () => this.stopQuiz();
@@ -2043,19 +2010,6 @@ class App {
     if ((this.asl.mode === 'SPELL') !== wantSpell) this.doMode();
     if (!wantSpell) this.setInputLang(tab === 'isl' ? 'ISL' : 'ASL');
     showToast(`Now show “${sign}” to the camera and hold it still`, 'info', 3500);
-  }
-
-  fillCollectLabels() {
-    const sel = document.getElementById('collectLabel');
-    const phrases = this.asl.lang === 'ISL' ? I_INFO : P_INFO;
-    const source = this.asl.mode === 'SPELL' ? S_INFO : phrases;
-    sel.innerHTML = Object.keys(source).map(k => `<option value="${k}">${k}</option>`).join('');
-    const hint = document.getElementById('collectHint');
-    if (hint) {
-      hint.textContent = this.asl.mode === 'SPELL'
-        ? 'Letter samples → dataset/recordings/samples.csv'
-        : `${this.asl.lang} sign samples (one or two hands) → dataset/recordings/samples.csv`;
-    }
   }
 
   renderConfidence(handVisible) {
@@ -2196,38 +2150,6 @@ class App {
     this.renderQuiz();
   }
 
-  // ---- Retrain from the browser ----
-  async retrainModel() {
-    const btn = document.getElementById('btnTrain');
-    if (btn.disabled) return;
-    const kind = this.currentKind();
-    if (kind !== 'letter') {
-      // Phrase and ISL are rule-based in this build (no recorded samples, no NN).
-      // Say so, instead of firing an optimistic "takes about a minute..." toast
-      // followed by the server's 500.
-      showToast('Phrase and ISL use hand-written rules in this build. Train the SVM from the SPELL screen.', 'info', 5000);
-      return;
-    }
-    btn.disabled = true;
-    const label = btn.textContent;
-    btn.textContent = 'Training…';
-    showToast('Training the letter classifier (SVM), this takes about half a minute…', 'info', 6000);
-    try {
-      // Training can genuinely take ~30 s; give it 90 s before we timeout.
-      const data = await api('/api/train', { kind }, { timeout: 90000 });
-      const acc = data.accuracy == null ? 0 : data.accuracy * 100;
-      showToast(`Model retrained — ${acc.toFixed(1)}% on ${data.n_samples || 0} samples, ${data.n_classes || 0} signs`,
-                'success', 6000);
-      this.log(`Retrained: ${acc.toFixed(1)}% accuracy`, 'sign');
-      await this.refreshModelStatus();
-    } catch (e) {
-      showToast(e.message || 'Training failed', 'error', 6000);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = label;
-    }
-  }
-
   renderGuide() {
     this.dictTab = this.dictTab || 'letter';
     this.dictLang = this.dictLang || 'en';
@@ -2312,7 +2234,6 @@ class App {
     });
     if (this.quiz) this.stopQuiz();
     this.resetMl();
-    this.fillCollectLabels();
     this.updateModelPill();
     showToast(`Input language: ${lang}`, 'info', 1800);
     this.log('Switched to ' + lang, 'letter');
@@ -2340,6 +2261,11 @@ class App {
     const text = on ? 'ML MODEL' : 'RULES';
     if (pill.textContent !== text) pill.textContent = text;
     pill.classList.toggle('on', on);
+    // Finger pills are useful feedback on PHRASE/ISL (where the rule classifier
+    // reads them) but just blink without informing the SVM path on SPELL - hide
+    // there to cut clutter.
+    const fingers = document.getElementById('fingers');
+    if (fingers) fingers.style.display = kind === 'letter' ? 'none' : '';
     // Degraded Spell banner: 12 of 26 letters have no rule fallback at all.
     // Only show when the user is on SPELL and the SVM failed to load.
     const banner = document.getElementById('spellDegraded');
@@ -2362,73 +2288,14 @@ class App {
       this.mlReady = !!(data.success && data.model_loaded);
       if (data.threshold) this.ML_MIN_CONF = Number(data.threshold);
       this.updateModelPill();
-      if (data.samples != null) document.getElementById('collectStat').textContent = data.samples + ' samples';
-      // The public host turns recording and retraining off; hide those controls there
-      this.trainingEnabled = data.training_enabled !== false;
-      ['btnRecord', 'btnTrain', 'collectLabel', 'collectHint', 'collectSigner', 'collectTest'].forEach(id => {
-        const el = document.getElementById(id);
-        const target = id === 'collectTest' ? el && el.parentElement : el;
-        if (target) target.style.display = this.trainingEnabled ? '' : 'none';
-      });
-      if (!this.trainingEnabled) document.getElementById('collectStat').textContent = 'Recording is available when running locally';
     } catch (e) {
-      // Server unreachable. The UI must not keep insisting a model is loaded or
-      // training is possible; otherwise the loop keeps POSTing /api/classify
-      // against a dead server and the pill lies about state.
+      // Server unreachable. The UI must not keep insisting a model is loaded;
+      // otherwise the loop keeps POSTing /api/classify against a dead server
+      // and the pill lies about state.
       this.mlReady = false;
-      this.trainingEnabled = false;
       this.resetMl();
       this.updateModelPill();
-      ['btnRecord', 'btnTrain', 'collectLabel', 'collectHint', 'collectSigner', 'collectTest'].forEach(id => {
-        const el = document.getElementById(id);
-        const target = id === 'collectTest' ? el && el.parentElement : el;
-        if (target) target.style.display = 'none';
-      });
     }
-  }
-
-  toggleRecord() {
-    const signerInput = document.getElementById('collectSigner');
-    if (!this.collecting && (!this.vid || !this.vid.srcObject)) {
-      showToast('Start the camera first, then record a sample.', 'error', 4000);
-      return;
-    }
-    if (!this.collecting && !signerInput.value.trim()) {
-      showToast('Type the signer\'s name first, so their samples can be kept apart for testing', 'error', 3500);
-      signerInput.focus();
-      return;
-    }
-    try { localStorage.setItem('vani_signer', signerInput.value.trim()); } catch (e) { /* storage blocked */ }
-    this.collecting = !this.collecting;
-    const btn = document.getElementById('btnRecord');
-    btn.textContent = this.collecting ? 'Stop recording' : 'Record dataset';
-    btn.classList.toggle('rec-on', this.collecting);
-    const kind = this.currentKind();
-    const label = document.getElementById('collectLabel').value || 'sign';
-    showToast(
-      this.collecting
-        ? `Recording ${kind} samples for “${label}” — hold pose, move hand slightly`
-        : 'Recording stopped',
-      'info',
-      2800
-    );
-  }
-
-  async saveSample(hands) {
-    const label = document.getElementById('collectLabel').value;
-    const kind = this.currentKind();
-    const signer = document.getElementById('collectSigner').value.trim();
-    const split = document.getElementById('collectTest').checked ? 'test' : '';
-    try {
-      const data = await api('/api/collect', { label, hands, kind, signer, split });
-      if (data.success) {
-        const target = data.target || 25;
-        const done = data.label_count >= target ? ' ✓ goal met' : '';
-        const where = data.split === 'test' ? 'test set' : 'training';
-        document.getElementById('collectStat').textContent =
-          `${data.label_count}/${target} × ${data.label} (${where}, ${data.samples} ${data.kind} samples)${done}`;
-      }
-    } catch (e) { /* ignore dropped frames and 4xx (e.g. bad label) */ }
   }
 
   async classifyMl(hands, kind) {
@@ -2540,10 +2407,6 @@ class App {
         handedness: (r.handednesses && r.handednesses[i] && r.handednesses[i][0]) ? r.handednesses[i][0].categoryName : ''
       }));
       hands.forEach(h => this.draw(h.landmarks));
-      if (this.collecting) {
-        this.collectEvery++;
-        if (this.collectEvery % 4 === 0) this.saveSample(hands);
-      }
       // Use the trained model for this screen if there is one; otherwise the rules decide
       const kind = this.currentKind();
       const useMl = this.modelReady(kind);
@@ -2702,7 +2565,6 @@ class App {
     if (m === 'PHRASE' && this.word) { this.sentence += (this.sentence ? ' ' : '') + this.word; this.word = ''; this.words++; }
     if (this.quiz) this.stopQuiz();        // Practice is SPELL-only; a mode flip must stop it (A11)
     this.resetMl();                        // every classify value is for the OLD screen (A5)
-    this.fillCollectLabels();
     this.updateModelPill();
     this.log('Switched to ' + m + ' mode', 'letter');
   }
